@@ -54,7 +54,7 @@ class ZexNoteApp extends StatelessWidget {
   }
 }
 
-// 便签数据模型（新增 JSON 序列化持久存储支持）
+// 便签数据模型
 class Note {
   final String id;
   final String title;
@@ -115,7 +115,6 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     autoCheckUpdate();
   }
 
-  // 修复：从本地加载保存的便签
   Future<void> loadNotesFromStorage() async {
     final prefs = await SharedPreferences.getInstance();
     final String? notesJson = prefs.getString('saved_notes');
@@ -127,7 +126,6 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     }
   }
 
-  // 修复：将便签持久化保存到本地
   Future<void> saveNotesToStorage() async {
     final prefs = await SharedPreferences.getInstance();
     final String encoded = jsonEncode(notes.map((e) => e.toJson()).toList());
@@ -162,7 +160,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     } catch (_) {}
 
     if (latestVer.isEmpty) {
-      if (showNoUpdateToast && mounted) {
+      if (showNoUpdateToast && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("无法获取版本信息")));
       }
       return;
@@ -170,13 +168,13 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
 
     const currentVer = "v1.0.0";
     if (latestVer == currentVer) {
-      if (showNoUpdateToast && mounted) {
+      if (showNoUpdateToast && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("当前已是最新版本")));
       }
       return;
     }
 
-    if (mounted) {
+    if (context.mounted) {
       showDialog(
         context: context,
         builder: (ctx) => UpdateDialog(
@@ -210,11 +208,12 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(30),
-            boxShadow: [
+            // 修复：使用绝对常量的十六进制颜色以通过严格的 const_eval 校验
+            boxShadow: const [
               BoxShadow(
-                color: Colors.black.withOpacity(0.1),
+                color: Color(0x1A000000), 
                 blurRadius: 10,
-                offset: const Offset(0, 4),
+                offset: Offset(0, 4),
               )
             ],
           ),
@@ -273,7 +272,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
         pageBuilder: (context, animation, secondaryAnimation) => NoteEditPage(
           onSave: (note) {
             setState(() => notes.add(note));
-            saveNotesToStorage(); // 修复：实时持久化保存
+            saveNotesToStorage();
           },
         ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -295,7 +294,6 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   }
 }
 
-// 修复：剥离了危险的本地写入逻辑，改由系统浏览器直接安全下载
 class UpdateDialog extends StatelessWidget {
   final String downloadUrl;
   final String newVer;
@@ -367,7 +365,6 @@ class NoteHomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 过滤出未归档的便签
     final activeNotes = notes.where((n) => !n.isArchived).toList();
     return Scaffold(
       appBar: AppBar(title: const Text("ZexNote")),
@@ -493,7 +490,6 @@ class _NoteEditPageState extends State<NoteEditPage> {
           TextButton(
             onPressed: () async {
               Navigator.pop(c);
-              // 修复：改用安全的系统分享唤起，避免本地文件权限冲突
               final shareText = "${note.title}\n\n${note.content}";
               await Share.share(shareText, subject: note.title);
             },
@@ -506,11 +502,15 @@ class _NoteEditPageState extends State<NoteEditPage> {
 
   @override
   Widget build(BuildContext context) {
+    // 修复：全面适配 Flutter 3.24 最新版的路由返回拦截和严格的安全上下文校验
     return PopScope(
       canPop: false,
-      onPopInvoked: (didPop) async {
+      onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
-        if (await _onWillPop() && mounted) Navigator.pop(context);
+        final shouldPop = await _onWillPop();
+        if (shouldPop && context.mounted) {
+          Navigator.pop(context);
+        }
       },
       child: Scaffold(
         appBar: AppBar(
@@ -595,7 +595,6 @@ class SettingPage extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.only(bottom: 80),
         children: [
-          // 修复：通过监听全局状态实现颜色的实时切换
           ValueListenableBuilder<bool>(
             valueListenable: globalDynamicColorNotifier,
             builder: (context, isDynamic, _) {
@@ -627,4 +626,4 @@ class SettingPage extends StatelessWidget {
                       child: child,
                     );
                   },
-                  transitionDuration: const Duration(milliseconds:
+                  transitionDuration: const Duration(milliseconds
