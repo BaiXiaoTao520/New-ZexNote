@@ -153,6 +153,17 @@ jobs:
       - name: 删除自动生成的模板测试文件
         run: rm -f test/widget_test.dart
 
+      - name: 修复安卓图标背景色资源缺失
+        run: |
+          mkdir -p android/app/src/main/res/values
+          cat > android/app/src/main/res/values/colors.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="ic_launcher_background">#FFFFFF</color>
+          </resources>
+          EOF
+          echo "✅ 已补充 colors.xml"
+
       - name: Dart语法检查
         run: flutter analyze
 
