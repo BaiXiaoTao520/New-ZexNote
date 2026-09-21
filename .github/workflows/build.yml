@@ -41,15 +41,58 @@ jobs:
           flutter create --platforms=android --project-name zexnote --org com.zex .
           echo "✅ 已自动生成标准V2 Android工程"
 
-      - name: 生成完整正确的build.gradle
+      - name: 生成完整Gradle配置（AGP8.3 + Gradle8.3，彻底解决依赖找不到）
         run: |
-          cat > android/app/build.gradle << 'GRADLE_EOF'
+          # 根目录build.gradle
+          cat > android/build.gradle << 'ROOT_GRADLE_EOF'
+          buildscript {
+              ext.kotlin_version = '1.9.24'
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.3.0'
+                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+              }
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.buildDir = '../build'
+          subprojects {
+              project.buildDir = "${rootProject.buildDir}/${project.name}"
+          }
+          subprojects {
+              project.evaluationDependsOn(':app')
+          }
+          tasks.register("clean", Delete) {
+              delete rootProject.buildDir
+          }
+          ROOT_GRADLE_EOF
+
+          # settings.gradle
+          cat > android/settings.gradle << 'SETTINGS_GRADLE_EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          include ':app'
+          SETTINGS_GRADLE_EOF
+
+          # app/build.gradle
+          cat > android/app/build.gradle << 'APP_GRADLE_EOF'
           plugins {
               id "com.android.application"
               id "kotlin-android"
               id "dev.flutter.flutter-gradle-plugin"
           }
-
           def localProperties = new Properties()
           def localPropertiesFile = rootProject.file('local.properties')
           if (localPropertiesFile.exists()) {
@@ -57,21 +100,17 @@ jobs:
                   localProperties.load(reader)
               }
           }
-
           def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
           if (flutterVersionCode == null) {
               flutterVersionCode = '1'
           }
-
           def flutterVersionName = localProperties.getProperty('flutter.versionName')
           if (flutterVersionName == null) {
               flutterVersionName = '1.0'
           }
-
           android {
               namespace "com.zex.note"
               compileSdk 36
-
               defaultConfig {
                   applicationId "com.zex.note"
                   minSdk 26
@@ -82,28 +121,35 @@ jobs:
                       abiFilters 'arm64-v8a'
                   }
               }
-
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_1_8
                   targetCompatibility JavaVersion.VERSION_1_8
               }
-
               kotlinOptions {
                   jvmTarget = '1.8'
               }
-
               buildTypes {
                   release {
                       signingConfig signingConfigs.debug
                   }
               }
           }
-
           flutter {
               source '../..'
           }
-          GRADLE_EOF
-          echo "✅ 已生成完整正确的build.gradle"
+          APP_GRADLE_EOF
+
+          # 指定Gradle wrapper版本8.3
+          mkdir -p android/gradle/wrapper
+          cat > android/gradle/wrapper/gradle-wrapper.properties << 'WRAPPER_EOF'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.3-bin.zip
+          WRAPPER_EOF
+
+          echo "✅ 已生成完整Gradle配置：AGP 8.3 + Gradle 8.3"
 
       - name: 自动添加权限到AndroidManifest.xml
         run: |
