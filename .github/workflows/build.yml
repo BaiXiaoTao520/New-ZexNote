@@ -184,7 +184,7 @@ jobs:
 
       - name: 对APK进行签名
         run: |
-          apksigner sign --ks zexnote-key.jks --ks-pass pass:${{ secrets.KEYSTORE_PASSWORD }} --key-pass pass:${{ secrets.KEY_PASSWORD }} --alias ${{ secrets.KEY_ALIAS }} build/app/outputs/flutter-apk/app-release.apk
+          apksigner sign --ks zexnote-key.jks --ks-pass pass:${{ secrets.KEYSTORE_PASSWORD }} --key-pass pass:${{ secrets.KEY_PASSWORD }} --ks-key-alias ${{ secrets.KEY_ALIAS }} build/app/outputs/flutter-apk/app-release.apk
 
       - name: 校验APK签名
         run: apksigner verify build/app/outputs/flutter-apk/app-release.apk
