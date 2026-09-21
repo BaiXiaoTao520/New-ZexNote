@@ -28,59 +28,31 @@ jobs:
       - name: 获取项目依赖
         run: flutter pub get
 
-      # ========== 自动生成正确的Android V2 Embedding文件，解决v1报错 ==========
-      - name: 自动生成V2 Embedding配置
+      # ========== 核心修复：自动生成标准V2 Android工程 ==========
+      - name: 自动生成完整Android V2工程
         run: |
-          # 创建MainActivity.kt目录
-          mkdir -p android/app/src/main/kotlin/com/zex/note
-          # 写入正确的MainActivity.kt（V2嵌入）
-          cat > android/app/src/main/kotlin/com/zex/note/MainActivity.kt << 'EOF'
-          package com.zex.note
+          # 用flutter create自动生成标准安卓工程，强制V2 Embedding
+          flutter create --platforms=android --project-name zexnote --org com.zex .
+          echo "✅ 已自动生成标准V2 Android工程"
 
-          import io.flutter.embedding.android.FlutterActivity
+      - name: 自动修改build.gradle配置（包名/最低版本/仅arm64）
+        run: |
+          # 自动修改android/app/build.gradle
+          sed -i 's/applicationId "com.example.zexnote"/applicationId "com.zex.note"/g' android/app/build.gradle
+          sed -i 's/namespace "com.example.zexnote"/namespace "com.zex.note"/g' android/app/build.gradle
+          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 26/g' android/app/build.gradle
+          sed -i 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 36/g' android/app/build.gradle
+          # 仅保留arm64架构
+          echo "        ndk {" >> android/app/build.gradle
+          echo "            abiFilters 'arm64-v8a'" >> android/app/build.gradle
+          echo "        }" >> android/app/build.gradle
+          echo "✅ 已自动修改安卓配置"
 
-          class MainActivity: FlutterActivity() {
-          }
-          EOF
-          # 修正AndroidManifest.xml，确保flutterEmbedding=2
-          mkdir -p android/app/src/main
-          cat > android/app/src/main/AndroidManifest.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="com.zex.note">
-
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-              <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
-              <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-
-              <application
-                  android:label="ZexNote"
-                  android:name="${applicationName}"
-                  android:icon="@mipmap/ic_launcher"
-                  android:roundIcon="@mipmap/ic_launcher_round">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true"
-                      android:launchMode="singleTop"
-                      android:theme="@style/LaunchTheme"
-                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
-                      android:hardwareAccelerated="true"
-                      android:windowSoftInputMode="adjustResize">
-                      <meta-data
-                          android:name="flutterEmbedding"
-                          android:value="2" />
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-          echo "✅ 已自动生成V2 Embedding配置文件"
+      - name: 自动添加权限到AndroidManifest.xml
+        run: |
+          # 在manifest标签里自动添加需要的权限
+          sed -i 's|<application>|<uses-permission android:name="android.permission.INTERNET" />\n<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />\n<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />\n<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n<uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />\n<application>|g' android/app/src/main/AndroidManifest.xml
+          echo "✅ 已自动添加所需权限"
 
       - name: Dart语法检查
         run: flutter analyze
