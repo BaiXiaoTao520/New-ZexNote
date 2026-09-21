@@ -35,18 +35,69 @@ jobs:
           flutter create --platforms=android --project-name zexnote --org com.zex .
           echo "✅ 已自动生成标准V2 Android工程"
 
-      - name: 自动修改build.gradle配置（包名/最低版本/仅arm64）
+      - name: 生成完整正确的build.gradle
         run: |
-          # 自动修改android/app/build.gradle
-          sed -i 's/applicationId "com.example.zexnote"/applicationId "com.zex.note"/g' android/app/build.gradle
-          sed -i 's/namespace "com.example.zexnote"/namespace "com.zex.note"/g' android/app/build.gradle
-          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 26/g' android/app/build.gradle
-          sed -i 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 36/g' android/app/build.gradle
-          # 仅保留arm64架构
-          echo "        ndk {" >> android/app/build.gradle
-          echo "            abiFilters 'arm64-v8a'" >> android/app/build.gradle
-          echo "        }" >> android/app/build.gradle
-          echo "✅ 已自动修改安卓配置"
+          cat > android/app/build.gradle << 'GRADLE_EOF'
+          plugins {
+              id "com.android.application"
+              id "kotlin-android"
+              id "dev.flutter.flutter-gradle-plugin"
+          }
+
+          def localProperties = new Properties()
+          def localPropertiesFile = rootProject.file('local.properties')
+          if (localPropertiesFile.exists()) {
+              localPropertiesFile.withReader('UTF-8') { reader ->
+                  localProperties.load(reader)
+              }
+          }
+
+          def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
+          if (flutterVersionCode == null) {
+              flutterVersionCode = '1'
+          }
+
+          def flutterVersionName = localProperties.getProperty('flutter.versionName')
+          if (flutterVersionName == null) {
+              flutterVersionName = '1.0'
+          }
+
+          android {
+              namespace "com.zex.note"
+              compileSdk 36
+
+              defaultConfig {
+                  applicationId "com.zex.note"
+                  minSdk 26
+                  targetSdk 36
+                  versionCode flutterVersionCode.toInteger()
+                  versionName flutterVersionName
+                  ndk {
+                      abiFilters 'arm64-v8a'
+                  }
+              }
+
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_1_8
+                  targetCompatibility JavaVersion.VERSION_1_8
+              }
+
+              kotlinOptions {
+                  jvmTarget = '1.8'
+              }
+
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.debug
+                  }
+              }
+          }
+
+          flutter {
+              source '../..'
+          }
+          GRADLE_EOF
+          echo "✅ 已生成完整正确的build.gradle"
 
       - name: 自动添加权限到AndroidManifest.xml
         run: |
