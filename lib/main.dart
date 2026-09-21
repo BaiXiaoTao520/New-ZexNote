@@ -208,7 +208,6 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(30),
-            // 修复：使用绝对常量的十六进制颜色以通过严格的 const_eval 校验
             boxShadow: const [
               BoxShadow(
                 color: Color(0x1A000000), 
@@ -502,7 +501,6 @@ class _NoteEditPageState extends State<NoteEditPage> {
 
   @override
   Widget build(BuildContext context) {
-    // 修复：全面适配 Flutter 3.24 最新版的路由返回拦截和严格的安全上下文校验
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
@@ -626,4 +624,72 @@ class SettingPage extends StatelessWidget {
                       child: child,
                     );
                   },
-                  transitionDuration: const Duration(milliseconds
+                  transitionDuration: const Duration(milliseconds: 300),
+                ),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.system_update),
+            title: const Text("手动检查新版本"),
+            onTap: onCheckUpdate,
+          ),
+          const SizedBox(height: 40),
+        ],
+      ),
+    );
+  }
+}
+
+class AboutPage extends StatelessWidget {
+  const AboutPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("关于 ZexNote")),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x1A000000),
+                      blurRadius: 20,
+                      offset: Offset(0, 8),
+                    )
+                  ],
+                ),
+                child: const Icon(Icons.note, size: 64),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                "ZexNote",
+                style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 2,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "版本 v1.0.0",
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+              const SizedBox(height: 80),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
