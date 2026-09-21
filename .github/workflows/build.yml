@@ -25,7 +25,7 @@ jobs:
       - name: 打印Flutter版本
         run: flutter --version
 
-      - name: 锁定dynamic_color兼容版本（避免1.9.0 Gradle kts报错）
+      - name: 锁定dynamic_color兼容版本
         run: |
           # 把pubspec里的dynamic_color降级到兼容的1.7.0版本
           sed -i 's/dynamic_color: .*/dynamic_color: ^1.7.0/' pubspec.yaml
@@ -41,27 +41,46 @@ jobs:
           flutter create --platforms=android --project-name zexnote --org com.zex .
           echo "✅ 已自动生成标准V2 Android工程"
 
-      - name: 生成完整Gradle配置（AGP8.3 + Gradle8.3，彻底解决依赖找不到）
+      - name: 生成Flutter官方标准Gradle配置（彻底解决插件找不到）
         run: |
-          # 根目录build.gradle
-          cat > android/build.gradle << 'ROOT_GRADLE_EOF'
-          buildscript {
-              ext.kotlin_version = '1.9.24'
+          # settings.gradle（Flutter 3.24官方标准写法）
+          cat > android/settings.gradle << 'SETTINGS_GRADLE_EOF'
+          pluginManagement {
+              def flutterSdkPath = {
+                  def properties = new Properties()
+                  file("local.properties").withInputStream { properties.load(it) }
+                  def flutterSdkPath = properties.getProperty("flutter.sdk")
+                  assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
+                  return flutterSdkPath
+              }()
+
+              includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
+
               repositories {
                   google()
                   mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.3.0'
-                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+                  gradlePluginPortal()
               }
           }
+
+          plugins {
+              id "dev.flutter.flutter-plugin-loader" version "1.0.0"
+              id "com.android.application" version "8.3.0" apply false
+              id "org.jetbrains.kotlin.android" version "1.9.24" apply false
+          }
+
+          include ":app"
+          SETTINGS_GRADLE_EOF
+
+          # 根build.gradle（空的就行，官方标准）
+          cat > android/build.gradle << 'ROOT_GRADLE_EOF'
           allprojects {
               repositories {
                   google()
                   mavenCentral()
               }
           }
+
           rootProject.buildDir = '../build'
           subprojects {
               project.buildDir = "${rootProject.buildDir}/${project.name}"
@@ -69,22 +88,11 @@ jobs:
           subprojects {
               project.evaluationDependsOn(':app')
           }
+
           tasks.register("clean", Delete) {
               delete rootProject.buildDir
           }
           ROOT_GRADLE_EOF
-
-          # settings.gradle
-          cat > android/settings.gradle << 'SETTINGS_GRADLE_EOF'
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-          include ':app'
-          SETTINGS_GRADLE_EOF
 
           # app/build.gradle
           cat > android/app/build.gradle << 'APP_GRADLE_EOF'
@@ -93,6 +101,7 @@ jobs:
               id "kotlin-android"
               id "dev.flutter.flutter-gradle-plugin"
           }
+
           def localProperties = new Properties()
           def localPropertiesFile = rootProject.file('local.properties')
           if (localPropertiesFile.exists()) {
@@ -100,17 +109,21 @@ jobs:
                   localProperties.load(reader)
               }
           }
+
           def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
           if (flutterVersionCode == null) {
               flutterVersionCode = '1'
           }
+
           def flutterVersionName = localProperties.getProperty('flutter.versionName')
           if (flutterVersionName == null) {
               flutterVersionName = '1.0'
           }
+
           android {
               namespace "com.zex.note"
               compileSdk 36
+
               defaultConfig {
                   applicationId "com.zex.note"
                   minSdk 26
@@ -121,25 +134,29 @@ jobs:
                       abiFilters 'arm64-v8a'
                   }
               }
+
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_1_8
                   targetCompatibility JavaVersion.VERSION_1_8
               }
+
               kotlinOptions {
                   jvmTarget = '1.8'
               }
+
               buildTypes {
                   release {
                       signingConfig signingConfigs.debug
                   }
               }
           }
+
           flutter {
               source '../..'
           }
           APP_GRADLE_EOF
 
-          # 指定Gradle wrapper版本8.3
+          # Gradle wrapper 8.3
           mkdir -p android/gradle/wrapper
           cat > android/gradle/wrapper/gradle-wrapper.properties << 'WRAPPER_EOF'
           distributionBase=GRADLE_USER_HOME
@@ -149,7 +166,7 @@ jobs:
           distributionUrl=https\://services.gradle.org/distributions/gradle-8.3-bin.zip
           WRAPPER_EOF
 
-          echo "✅ 已生成完整Gradle配置：AGP 8.3 + Gradle 8.3"
+          echo "✅ 已生成Flutter官方标准Gradle配置"
 
       - name: 自动添加权限到AndroidManifest.xml
         run: |
