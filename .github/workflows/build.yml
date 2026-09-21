@@ -25,11 +25,11 @@ jobs:
       - name: 打印Flutter版本
         run: flutter --version
 
-      - name: Dart语法检查
-        run: flutter analyze
-
       - name: 获取项目依赖
         run: flutter pub get
+
+      - name: Dart语法检查
+        run: flutter analyze
 
       # 读取pubspec版本号
       - name: 读取版本号
