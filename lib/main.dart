@@ -1,14 +1,18 @@
-import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
+
+// 全局通知器，用于动态颜色开关的实时热重绘
+final ValueNotifier<bool> globalDynamicColorNotifier = ValueNotifier(true);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final prefs = await SharedPreferences.getInstance();
+  globalDynamicColorNotifier.value = prefs.getBool("dynamicColor") ?? true;
   runApp(const ZexNoteApp());
 }
 
@@ -17,25 +21,74 @@ class ZexNoteApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DynamicColorBuilder(builder: (lightDynamic, darkDynamic) {
-      return MaterialApp(
-        title: "ZexNote",
-        theme: ThemeData(
-          brightness: Brightness.light,
-          colorScheme: lightDynamic,
-          useMaterial3: true,
-        ),
-        darkTheme: ThemeData(
-          brightness: Brightness.dark,
-          colorScheme: darkDynamic,
-          useMaterial3: true,
-        ),
-        themeMode: ThemeMode.system,
-        home: const MainPage(),
-        debugShowCheckedModeBanner: false,
-      );
-    });
+    return ValueListenableBuilder<bool>(
+      valueListenable: globalDynamicColorNotifier,
+      builder: (context, useDynamic, _) {
+        return DynamicColorBuilder(builder: (lightDynamic, darkDynamic) {
+          final ColorScheme lightScheme = (useDynamic && lightDynamic != null)
+              ? lightDynamic
+              : ColorScheme.fromSeed(seedColor: Colors.lightGreen);
+          final ColorScheme darkScheme = (useDynamic && darkDynamic != null)
+              ? darkDynamic
+              : ColorScheme.fromSeed(seedColor: Colors.lightGreen, brightness: Brightness.dark);
+
+          return MaterialApp(
+            title: "ZexNote",
+            theme: ThemeData(
+              brightness: Brightness.light,
+              colorScheme: lightScheme,
+              useMaterial3: true,
+            ),
+            darkTheme: ThemeData(
+              brightness: Brightness.dark,
+              colorScheme: darkScheme,
+              useMaterial3: true,
+            ),
+            themeMode: ThemeMode.system,
+            home: const MainPage(),
+            debugShowCheckedModeBanner: false,
+          );
+        });
+      },
+    );
   }
+}
+
+// 便签数据模型（新增 JSON 序列化持久存储支持）
+class Note {
+  final String id;
+  final String title;
+  final String content;
+  final Color color;
+  final DateTime createTime;
+  final bool isArchived;
+
+  Note({
+    String? id,
+    required this.title,
+    required this.content,
+    required this.color,
+    required this.createTime,
+    this.isArchived = false,
+  }) : id = id ?? DateTime.now().millisecondsSinceEpoch.toString();
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'content': content,
+        'color': color.value,
+        'createTime': createTime.toIso8601String(),
+        'isArchived': isArchived,
+      };
+
+  factory Note.fromJson(Map<String, dynamic> json) => Note(
+        id: json['id'],
+        title: json['title'],
+        content: json['content'],
+        color: Color(json['color']),
+        createTime: DateTime.parse(json['createTime']),
+        isArchived: json['isArchived'] ?? false,
+      );
 }
 
 class MainPage extends StatefulWidget {
@@ -45,85 +98,80 @@ class MainPage extends StatefulWidget {
   State<MainPage> createState() => _MainPageState();
 }
 
-class _MainPageState extends State<MainPage> {
+class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   int currentIndex = 0;
   final PageController pageCtrl = PageController();
-
-  late final List<Widget> pages;
+  late AnimationController _navAnimController;
+  List<Note> notes = [];
 
   @override
   void initState() {
     super.initState();
-    pages = [
-      const NoteHomePage(),
-      const ArchivePage(),
-      SettingPage(onCheckUpdate: checkVersion),
-    ];
+    _navAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+    );
+    loadNotesFromStorage();
     autoCheckUpdate();
   }
 
-  // 启动自动检查更新
+  // 修复：从本地加载保存的便签
+  Future<void> loadNotesFromStorage() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? notesJson = prefs.getString('saved_notes');
+    if (notesJson != null) {
+      final List decoded = jsonDecode(notesJson);
+      setState(() {
+        notes = decoded.map((e) => Note.fromJson(e)).toList();
+      });
+    }
+  }
+
+  // 修复：将便签持久化保存到本地
+  Future<void> saveNotesToStorage() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String encoded = jsonEncode(notes.map((e) => e.toJson()).toList());
+    await prefs.setString('saved_notes', encoded);
+  }
+
   Future<void> autoCheckUpdate() async {
     final prefs = await SharedPreferences.getInstance();
     bool autoCheck = prefs.getBool("autoCheckUpdate") ?? true;
     if (autoCheck) {
-      await checkVersion(showDialogIfNoUpdate: false);
+      await checkVersion(showNoUpdateToast: false);
     }
   }
 
-  Future<void> checkVersion({bool showDialogIfNoUpdate = true}) async {
+  Future<void> checkVersion({bool showNoUpdateToast = true}) async {
     const repo = "BaiXiaoTao520/New-ZexNote";
     String latestVer = "";
     String downloadUrl = "";
+    String updateLog = "";
 
-    // 双通道：优先GitHub API，失败切换Atom订阅源
     try {
       final apiRes = await http.get(Uri.parse("https://api.github.com/repos/$repo/releases/latest"));
       if (apiRes.statusCode == 200) {
         final json = jsonDecode(apiRes.body);
         latestVer = json["tag_name"];
+        updateLog = json["body"] ?? "";
         final assetsList = json["assets"] as List;
         if (assetsList.isNotEmpty) {
           downloadUrl = assetsList[0]["browser_download_url"];
         }
       }
-    } catch (_) {
-      // API被限流，切换Atom订阅源
-      try {
-        final atomRes = await http.get(Uri.parse("https://github.com/$repo/releases.atom"));
-        if (atomRes.statusCode == 200) {
-          final atomBody = atomRes.body;
-          final tagReg = RegExp(r'<title>(v[\d\.]+)</title>');
-          final match = tagReg.firstMatch(atomBody);
-          if (match != null) latestVer = match.group(1)!;
-        }
-      } catch (_) {}
-    }
+    } catch (_) {}
 
     if (latestVer.isEmpty) {
-      if (showDialogIfNoUpdate && mounted) {
-        showDialog(
-          context: context,
-          builder: (c) => const AlertDialog(
-            title: Text("提示"),
-            content: Text("无法获取版本信息"),
-          ),
-        );
+      if (showNoUpdateToast && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("无法获取版本信息")));
       }
       return;
     }
 
-    // 每次发新版必须同步修改这里
     const currentVer = "v1.0.0";
     if (latestVer == currentVer) {
-      if (showDialogIfNoUpdate && mounted) {
-        showDialog(
-          context: context,
-          builder: (c) => const AlertDialog(
-            title: Text("已是最新版"),
-            content: Text("当前没有新版本"),
-          ),
-        );
+      if (showNoUpdateToast && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("当前已是最新版本")));
       }
       return;
     }
@@ -131,7 +179,11 @@ class _MainPageState extends State<MainPage> {
     if (mounted) {
       showDialog(
         context: context,
-        builder: (ctx) => UpdateDialog(downloadUrl: downloadUrl, newVer: latestVer),
+        builder: (ctx) => UpdateDialog(
+          downloadUrl: downloadUrl,
+          newVer: latestVer,
+          updateLog: updateLog,
+        ),
       );
     }
   }
@@ -142,152 +194,148 @@ class _MainPageState extends State<MainPage> {
       body: PageView(
         controller: pageCtrl,
         onPageChanged: (idx) => setState(() => currentIndex = idx),
-        children: pages,
+        children: [
+          NoteHomePage(
+            notes: notes,
+            onAddNote: () => _openEditPage(),
+          ),
+          ArchivePage(notes: notes),
+          SettingPage(onCheckUpdate: () => checkVersion(showNoUpdateToast: true)),
+        ],
       ),
-      // 小型悬浮胶囊底部导航
       bottomNavigationBar: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
         child: Container(
+          height: 60,
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(28),
-          ),
-          child: BottomNavigationBar(
-            currentIndex: currentIndex,
-            onTap: (idx) {
-              pageCtrl.animateToPage(idx,
-                  duration: const Duration(milliseconds: 250), curve: Curves.easeInOut);
-            },
-            items: const [
-              BottomNavigationBarItem(icon: Icon(Icons.note), label: "便签"),
-              BottomNavigationBarItem(icon: Icon(Icons.archive), label: "归档"),
-              BottomNavigationBarItem(icon: Icon(Icons.settings), label: "设置"),
+            borderRadius: BorderRadius.circular(30),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              )
             ],
+          ),
+          child: Row(
+            children: List.generate(3, (idx) {
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    pageCtrl.animateToPage(
+                      idx,
+                      duration: const Duration(milliseconds: 250),
+                      curve: Curves.easeInOut,
+                    );
+                  },
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 250),
+                        curve: Curves.easeInOut,
+                        decoration: BoxDecoration(
+                          color: currentIndex == idx
+                              ? Theme.of(context).colorScheme.primaryContainer
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        margin: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                      Icon(
+                        idx == 0 ? Icons.note : idx == 1 ? Icons.archive : Icons.settings,
+                        color: currentIndex == idx
+                            ? Theme.of(context).colorScheme.onPrimaryContainer
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
           ),
         ),
       ),
+      floatingActionButton: currentIndex == 0
+          ? FloatingActionButton(
+              onPressed: _openEditPage,
+              child: const Icon(Icons.add),
+            )
+          : null,
     );
   }
-}
 
-// 缩小版更新弹窗：带可滚动日志窗口 + 升级图标
-class UpdateDialog extends StatefulWidget {
-  final String downloadUrl;
-  final String newVer;
-  const UpdateDialog({super.key, required this.downloadUrl, required this.newVer});
+  void _openEditPage() {
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => NoteEditPage(
+          onSave: (note) {
+            setState(() => notes.add(note));
+            saveNotesToStorage(); // 修复：实时持久化保存
+          },
+        ),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return SlideTransition(
+            position: Tween(begin: const Offset(0, 1), end: Offset.zero).animate(animation),
+            child: child,
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 300),
+      ),
+    );
+  }
 
   @override
-  State<UpdateDialog> createState() => _UpdateDialogState();
+  void dispose() {
+    _navAnimController.dispose();
+    pageCtrl.dispose();
+    super.dispose();
+  }
 }
 
-class _UpdateDialogState extends State<UpdateDialog> {
-  double progress = 0;
-  bool downloading = false;
-  int total = 0;
-  int received = 0;
-  final List<String> logLines = [];
-  final ScrollController logScrollCtrl = ScrollController();
-
-  void addLog(String msg) {
-    setState(() {
-      logLines.add(msg);
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (logScrollCtrl.hasClients) {
-        logScrollCtrl.animateTo(logScrollCtrl.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 100), curve: Curves.linear);
-      }
-    });
-  }
-
-  Future<void> startDownload() async {
-    setState(() {
-      downloading = true;
-      progress = 0;
-      received = 0;
-      logLines.clear();
-    });
-    addLog("开始下载：${widget.newVer}");
-
-    final dir = await getApplicationDocumentsDirectory();
-    final savePath = "${dir.path}/zexnote_update.apk";
-    final saveFile = File(savePath);
-    addLog("保存路径：$savePath");
-
-    try {
-      final req = http.Request("GET", Uri.parse(widget.downloadUrl));
-      final streamedResponse = await req.send();
-      total = streamedResponse.contentLength ?? 0;
-      addLog("文件总大小：$total bytes");
-
-      final sink = saveFile.openWrite();
-      await streamedResponse.stream.listen((List<int> chunk) {
-        sink.add(chunk);
-        received += chunk.length;
-        setState(() {
-          progress = total > 0 ? received / total : 0;
-        });
-      }).asFuture();
-      await sink.close();
-      addLog("✅ 下载完成，准备唤起安装器");
-
-      final uri = Uri.parse("file://$savePath");
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        addLog("❌ 无法启动安装器，请手动打开文件");
-      }
-    } catch (e) {
-      addLog("❌ 下载异常：$e");
-    } finally {
-      setState(() => downloading = false);
-    }
-  }
+// 修复：剥离了危险的本地写入逻辑，改由系统浏览器直接安全下载
+class UpdateDialog extends StatelessWidget {
+  final String downloadUrl;
+  final String newVer;
+  final String updateLog;
+  const UpdateDialog({
+    super.key,
+    required this.downloadUrl,
+    required this.newVer,
+    required this.updateLog,
+  });
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
-      titlePadding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      actionsPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       title: Row(
         children: [
           const Icon(Icons.system_update, size: 22),
           const SizedBox(width: 8),
-          Text("新版本 ${widget.newVer}", style: Theme.of(context).textTheme.titleMedium),
+          Text("新版本 $newVer"),
         ],
       ),
       content: SizedBox(
-        width: double.minPositive,
+        width: double.maxFinite,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (downloading)
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  LinearProgressIndicator(value: progress),
-                  const SizedBox(height: 6),
-                  Text("$received / $total bytes", style: const TextStyle(fontSize: 12)),
-                ],
-              ),
             const SizedBox(height: 8),
-            // 可滑动日志小窗口
             SizedBox(
-              height: 100,
-              width: double.infinity,
+              height: 120,
               child: Container(
-                padding: const EdgeInsets.all(6),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.surfaceContainerLow,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: SingleChildScrollView(
-                  controller: logScrollCtrl,
                   child: Text(
-                    logLines.join("\n"),
-                    style: const TextStyle(fontSize: 11, height: 1.3),
+                    updateLog.isEmpty ? "暂无更新日志" : updateLog,
+                    style: const TextStyle(fontSize: 12, height: 1.4),
                   ),
                 ),
               ),
@@ -297,99 +345,286 @@ class _UpdateDialogState extends State<UpdateDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => launchUrl(Uri.parse(widget.downloadUrl)),
-          child: const Text("浏览器下载"),
-        ),
-        TextButton(
           onPressed: () => Navigator.pop(context),
           child: const Text("稍后"),
         ),
-        if (!downloading)
-          TextButton(onPressed: startDownload, child: const Text("重试")),
+        TextButton(
+          onPressed: () {
+            launchUrl(Uri.parse(downloadUrl), mode: LaunchMode.externalApplication);
+            Navigator.pop(context);
+          },
+          child: const Text("浏览器下载"),
+        ),
       ],
+    );
+  }
+}
+
+class NoteHomePage extends StatelessWidget {
+  final List<Note> notes;
+  final VoidCallback onAddNote;
+  const NoteHomePage({super.key, required this.notes, required this.onAddNote});
+
+  @override
+  Widget build(BuildContext context) {
+    // 过滤出未归档的便签
+    final activeNotes = notes.where((n) => !n.isArchived).toList();
+    return Scaffold(
+      appBar: AppBar(title: const Text("ZexNote")),
+      body: activeNotes.isEmpty
+          ? const Center(child: Text("暂无便签，点击右下角加号新建"))
+          : ListView.builder(
+              padding: const EdgeInsets.only(bottom: 80),
+              itemCount: activeNotes.length,
+              itemBuilder: (context, idx) {
+                final note = activeNotes[idx];
+                return Card(
+                  color: note.color,
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: ListTile(
+                    title: Text(note.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text(note.content, maxLines: 2, overflow: TextOverflow.ellipsis),
+                  ),
+                );
+              },
+            ),
+    );
+  }
+}
+
+class ArchivePage extends StatelessWidget {
+  final List<Note> notes;
+  const ArchivePage({super.key, required this.notes});
+
+  @override
+  Widget build(BuildContext context) {
+    final archivedNotes = notes.where((n) => n.isArchived).toList();
+    return Scaffold(
+      appBar: AppBar(title: const Text("归档")),
+      body: archivedNotes.isEmpty
+          ? const Center(child: Text("暂无归档便签"))
+          : ListView.builder(
+              padding: const EdgeInsets.only(bottom: 80),
+              itemCount: archivedNotes.length,
+              itemBuilder: (context, idx) {
+                final note = archivedNotes[idx];
+                return Card(
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: ListTile(
+                    title: Text(note.title),
+                    subtitle: Text(note.content, maxLines: 2, overflow: TextOverflow.ellipsis),
+                  ),
+                );
+              },
+            ),
+    );
+  }
+}
+
+class NoteEditPage extends StatefulWidget {
+  final Function(Note) onSave;
+  const NoteEditPage({super.key, required this.onSave});
+
+  @override
+  State<NoteEditPage> createState() => _NoteEditPageState();
+}
+
+class _NoteEditPageState extends State<NoteEditPage> {
+  final titleCtrl = TextEditingController();
+  final contentCtrl = TextEditingController();
+  Color selectedColor = Colors.lightGreen.shade100;
+  bool hasUnsavedChanges = false;
+
+  final List<Color> colorOptions = [
+    Colors.lightGreen.shade100,
+    Colors.yellow.shade100,
+    Colors.pink.shade100,
+    Colors.blue.shade100,
+    Colors.purple.shade100,
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    titleCtrl.addListener(() => hasUnsavedChanges = true);
+    contentCtrl.addListener(() => hasUnsavedChanges = true);
+  }
+
+  Future<bool> _onWillPop() async {
+    if (!hasUnsavedChanges) return true;
+    final result = await showDialog(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text("未保存的更改"),
+        content: const Text("你有未保存的内容，确定要离开吗？"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text("取消")),
+          TextButton(onPressed: () => Navigator.pop(c, true), child: const Text("离开")),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
+  void _showSaveOptions() {
+    final note = Note(
+      title: titleCtrl.text.isEmpty ? "无标题" : titleCtrl.text,
+      content: contentCtrl.text,
+      color: selectedColor,
+      createTime: DateTime.now(),
+    );
+    showDialog(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text("保存方式"),
+        content: const Text("选择保存这篇便签的方式"),
+        actions: [
+          TextButton(
+            onPressed: () {
+              widget.onSave(note);
+              Navigator.pop(c);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("已保存")),
+              );
+              Navigator.pop(context);
+            },
+            child: const Text("保存并退出"),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(c);
+              // 修复：改用安全的系统分享唤起，避免本地文件权限冲突
+              final shareText = "${note.title}\n\n${note.content}";
+              await Share.share(shareText, subject: note.title);
+            },
+            child: const Text("分享便签"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) async {
+        if (didPop) return;
+        if (await _onWillPop() && mounted) Navigator.pop(context);
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text("编辑便签"),
+          actions: [
+            IconButton(onPressed: _showSaveOptions, icon: const Icon(Icons.save)),
+          ],
+        ),
+        body: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              TextField(
+                controller: titleCtrl,
+                decoration: const InputDecoration(
+                  hintText: "标题",
+                  border: InputBorder.none,
+                ),
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: TextField(
+                  controller: contentCtrl,
+                  maxLines: null,
+                  expands: true,
+                  decoration: const InputDecoration(
+                    hintText: "写点什么...",
+                    border: InputBorder.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 60,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: colorOptions.length,
+                  itemBuilder: (context, idx) {
+                    final color = colorOptions[idx];
+                    return GestureDetector(
+                      onTap: () => setState(() => selectedColor = color),
+                      child: Container(
+                        width: 50,
+                        margin: const EdgeInsets.symmetric(horizontal: 8),
+                        decoration: BoxDecoration(
+                          color: color,
+                          shape: BoxShape.circle,
+                          border: selectedColor == color
+                              ? Border.all(color: Colors.black, width: 2)
+                              : null,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 80),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
   @override
   void dispose() {
-    logScrollCtrl.dispose();
+    titleCtrl.dispose();
+    contentCtrl.dispose();
     super.dispose();
   }
 }
 
-// 占位页面，后续填充便签功能
-class NoteHomePage extends StatelessWidget {
-  const NoteHomePage({super.key});
-  @override
-  Widget build(BuildContext context) => const Center(child: Text("便签主页"));
-}
-
-class ArchivePage extends StatelessWidget {
-  const ArchivePage({super.key});
-  @override
-  Widget build(BuildContext context) => const Center(child: Text("归档页面"));
-}
-
-class SettingPage extends StatefulWidget {
+class SettingPage extends StatelessWidget {
   final VoidCallback onCheckUpdate;
   const SettingPage({super.key, required this.onCheckUpdate});
-
-  @override
-  State<SettingPage> createState() => _SettingPageState();
-}
-
-class _SettingPageState extends State<SettingPage> {
-  bool autoCheck = true;
-  final String currentVersion = "v1.0.0";
-
-  @override
-  void initState() {
-    super.initState();
-    loadSwitch();
-  }
-
-  Future<void> loadSwitch() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      autoCheck = prefs.getBool("autoCheckUpdate") ?? true;
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("设置")),
       body: ListView(
+        padding: const EdgeInsets.only(bottom: 80),
         children: [
-          const ListTile(
-            leading: Icon(Icons.info_outline),
-            title: Text("关于 ZexNote"),
-            subtitle: Text("简洁本地便签"),
-          ),
-          ListTile(
-            leading: const Icon(Icons.numbers),
-            title: const Text("当前版本"),
-            subtitle: Text(currentVersion),
-          ),
-          SwitchListTile(
-            secondary: const Icon(Icons.autorenew),
-            title: const Text("启动时自动检查更新"),
-            value: autoCheck,
-            onChanged: (val) async {
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.setBool("autoCheckUpdate", val);
-              setState(() {
-                autoCheck = val;
-              });
+          // 修复：通过监听全局状态实现颜色的实时切换
+          ValueListenableBuilder<bool>(
+            valueListenable: globalDynamicColorNotifier,
+            builder: (context, isDynamic, _) {
+              return SwitchListTile(
+                secondary: const Icon(Icons.palette),
+                title: const Text("动态颜色（Material You）"),
+                subtitle: const Text("跟随系统壁纸配色"),
+                value: isDynamic,
+                onChanged: (val) async {
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setBool("dynamicColor", val);
+                  globalDynamicColorNotifier.value = val;
+                },
+              );
             },
           ),
           ListTile(
-            leading: const Icon(Icons.system_update),
-            title: const Text("手动检查新版本"),
-            onTap: widget.onCheckUpdate,
-          ),
-        ],
-      ),
-    );
-  }
-}
+            leading: const Icon(Icons.info_outline),
+            title: const Text("关于 ZexNote"),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.push(
+                context,
+                PageRouteBuilder(
+                  pageBuilder: (context, animation, secondaryAnimation) => const AboutPage(),
+                  transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                    return SlideTransition(
+                      position: Tween(begin: const Offset(1, 0), end: Offset.zero).animate(animation),
+                      child: child,
+                    );
+                  },
+                  transitionDuration: const Duration(milliseconds:

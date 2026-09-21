@@ -1,6 +1,6 @@
 name: zexnote
 description: ZexNote 本地便签软件
-version: 1.0.0+1
+version: 1.0.0+2
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
@@ -8,11 +8,14 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  dynamic_color: ^1.7.0
+  # 严格锁定，千万不要加 ^，防止依赖冲突
+  dynamic_color: 1.6.8
   http: ^1.2.1
   shared_preferences: ^2.3.2
   path_provider: ^2.1.4
   url_launcher: ^6.3.0
+  # 移除崩溃率极高的 file_picker，换用安全的 share_plus
+  share_plus: ^10.0.0
 
 dev_dependencies:
   flutter_test:
