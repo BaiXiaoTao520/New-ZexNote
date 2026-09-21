@@ -25,25 +25,23 @@ jobs:
       - name: 打印Flutter版本
         run: flutter --version
 
-      - name: 锁定dynamic_color兼容版本（避免1.9.0 Gradle kts报错）
+      - name: 严格锁定dynamic_color版本（修复kts语法报错）
         run: |
-          # 把pubspec里的dynamic_color降级到兼容的1.7.0版本
-          sed -i 's/dynamic_color: .*/dynamic_color: ^1.7.0/' pubspec.yaml
+          # 去除^符号，严格锁定到1.6.3或1.7.0，避免拉取到带有高级KTS语法的最新版
+          sed -i 's/dynamic_color: .*/dynamic_color: 1.6.3/' pubspec.yaml
           cat pubspec.yaml | grep dynamic_color
 
       - name: 获取项目依赖
         run: flutter pub get
 
-      # ========== 核心修复：自动生成标准V2 Android工程 ==========
       - name: 自动生成完整Android V2工程
         run: |
-          # 用flutter create自动生成标准安卓工程，强制V2 Embedding
           flutter create --platforms=android --project-name zexnote --org com.zex .
           echo "✅ 已自动生成标准V2 Android工程"
 
-      - name: 生成Flutter官方标准Gradle配置（彻底解决插件找不到）
+      - name: 生成Flutter官方标准Gradle配置
         run: |
-          # settings.gradle（Flutter 3.24官方标准写法）
+          # settings.gradle
           cat > android/settings.gradle << 'SETTINGS_GRADLE_EOF'
           pluginManagement {
               def flutterSdkPath = {
@@ -72,7 +70,7 @@ jobs:
           include ":app"
           SETTINGS_GRADLE_EOF
 
-          # 根build.gradle（空的就行，官方标准）
+          # 根build.gradle
           cat > android/build.gradle << 'ROOT_GRADLE_EOF'
           allprojects {
               repositories {
@@ -110,24 +108,17 @@ jobs:
               }
           }
 
-          def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
-          if (flutterVersionCode == null) {
-              flutterVersionCode = '1'
-          }
-
-          def flutterVersionName = localProperties.getProperty('flutter.versionName')
-          if (flutterVersionName == null) {
-              flutterVersionName = '1.0'
-          }
+          def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '1'
+          def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '1.0'
 
           android {
               namespace "com.zex.note"
-              compileSdk 36
+              compileSdk 34 # 建议降级至34，36目前可能引发部分依赖库不兼容
 
               defaultConfig {
                   applicationId "com.zex.note"
                   minSdk 26
-                  targetSdk 36
+                  targetSdk 34
                   versionCode flutterVersionCode.toInteger()
                   versionName flutterVersionName
                   ndk {
@@ -156,7 +147,7 @@ jobs:
           }
           APP_GRADLE_EOF
 
-          # Gradle wrapper 8.3
+          # Gradle wrapper 8.6
           mkdir -p android/gradle/wrapper
           cat > android/gradle/wrapper/gradle-wrapper.properties << 'WRAPPER_EOF'
           distributionBase=GRADLE_USER_HOME
@@ -165,47 +156,50 @@ jobs:
           zipStorePath=wrapper/dists
           distributionUrl=https\://services.gradle.org/distributions/gradle-8.6-bin.zip
           WRAPPER_EOF
-
           echo "✅ 已生成Flutter官方标准Gradle配置"
 
       - name: 自动添加权限到AndroidManifest.xml
         run: |
-          # 在manifest标签里自动添加需要的权限
-          sed -i 's|<application>|<uses-permission android:name="android.permission.INTERNET" />\n<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />\n<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />\n<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n<uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />\n<application>|g' android/app/src/main/AndroidManifest.xml
+          # 修正替换逻辑：通过正则定位到 <application 的行，并在上一行插入权限配置
+          sed -i '/<application/i \
+              <uses-permission android:name="android.permission.INTERNET" />\n\
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n\
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />\n\
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />\n\
+              <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n\
+              <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />' android/app/src/main/AndroidManifest.xml
           echo "✅ 已自动添加所需权限"
 
-      - name: 删除自动生成的模板测试文件（自带错误）
+      - name: 删除自动生成的模板测试文件
         run: rm -f test/widget_test.dart
 
       - name: Dart语法检查
         run: flutter analyze
 
-      # 读取pubspec版本号
       - name: 读取版本号
         id: get_version
         run: |
           VERSION=$(grep 'version:' pubspec.yaml | head -1 | awk '{print $2}')
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
-      # 仅编译arm64-v8a
       - name: 编译Release APK（仅arm64）
         run: flutter build apk --release --target-platform android-arm64
 
-      # ========== 自动签名部分 ==========
+      - name: 准备系统环境工具 (安装 apksigner)
+        run: sudo apt-get update && sudo apt-get install -y apksigner
+
       - name: 还原keystore文件
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > zexnote-key.jks
+
+      - name: 对APK进行签名 (修正了产物路径)
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > zexnote-key.jks
-      - name: 对arm64-v8a APK签名
-        run: |
-          apksigner sign --ks zexnote-key.jks --ks-pass pass:${{ secrets.KEYSTORE_PASSWORD }} --key-pass pass:${{ secrets.KEY_PASSWORD }} --alias ${{ secrets.KEY_ALIAS }} build/app/outputs/apk/release/app-arm64-v8a-release.apk
-      
-      # 校验签名是否成功
+          apksigner sign --ks zexnote-key.jks --ks-pass pass:${{ secrets.KEYSTORE_PASSWORD }} --key-pass pass:${{ secrets.KEY_PASSWORD }} --alias ${{ secrets.KEY_ALIAS }} build/app/outputs/flutter-apk/app-release.apk
+
       - name: 校验APK签名
-        run: |
-          apksigner verify build/app/outputs/apk/release/app-arm64-v8a-release.apk
+        run: apksigner verify build/app/outputs/flutter-apk/app-release.apk
 
       - name: 列出编译产物
-        run: ls -lh build/app/outputs/apk/release/
+        run: ls -lh build/app/outputs/flutter-apk/
 
       - name: 发布Release，标记Latest
         uses: softprops/action-gh-release@v2
@@ -214,6 +208,6 @@ jobs:
           generate_release_notes: true
           make_latest: true
           files: |
-            build/app/outputs/apk/release/app-arm64-v8a-release.apk
+            build/app/outputs/flutter-apk/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
