@@ -29,9 +29,10 @@
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
+            <!-- Android V2 Embedding 标记 -->
             <meta-data
-                android:name="android:appComponentFactory"
-                android:value="androidx.core.app.CoreComponentFactory" />
+                android:name="flutterEmbedding"
+                android:value="2" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
