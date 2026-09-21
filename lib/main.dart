@@ -118,7 +118,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   Future<void> loadNotesFromStorage() async {
     final prefs = await SharedPreferences.getInstance();
     final String? notesJson = prefs.getString('saved_notes');
-    if (notesJson != null) {
+    if (notesJson != null && mounted) {
       final List decoded = jsonDecode(notesJson);
       setState(() {
         notes = decoded.map((e) => Note.fromJson(e)).toList();
@@ -159,8 +159,10 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       }
     } catch (_) {}
 
+    if (!mounted) return;
+
     if (latestVer.isEmpty) {
-      if (showNoUpdateToast && context.mounted) {
+      if (showNoUpdateToast && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("无法获取版本信息")));
       }
       return;
@@ -168,13 +170,13 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
 
     const currentVer = "v1.0.0";
     if (latestVer == currentVer) {
-      if (showNoUpdateToast && context.mounted) {
+      if (showNoUpdateToast && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("当前已是最新版本")));
       }
       return;
     }
 
-    if (context.mounted) {
+    if (mounted) {
       showDialog(
         context: context,
         builder: (ctx) => UpdateDialog(
@@ -646,6 +648,8 @@ class AboutPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const repoUrl = "https://github.com/BaiXiaoTao520/New-ZexNote";
+
     return Scaffold(
       appBar: AppBar(title: const Text("关于 ZexNote")),
       body: Center(
@@ -684,6 +688,20 @@ class AboutPage extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
+              ),
+              const SizedBox(height: 40),
+              // 新增：访问仓库选项，带互联网logo和指定描述
+              ListTile(
+                leading: const Icon(Icons.language),
+                title: const Text("访问仓库"),
+                subtitle: const Text("点击访问主页"),
+                trailing: const Icon(Icons.open_in_new, size: 18),
+                onTap: () async {
+                  final uri = Uri.parse(repoUrl);
+                  if (await canLaunchUrl(uri)) {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  }
+                },
               ),
               const SizedBox(height: 80),
             ],
