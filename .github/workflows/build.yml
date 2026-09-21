@@ -25,10 +25,10 @@ jobs:
       - name: 打印Flutter版本
         run: flutter --version
 
-      - name: 严格锁定dynamic_color版本（修复kts语法报错）
+      - name: 严格锁定dynamic_color版本（修复依赖冲突与kts报错）
         run: |
-          # 去除^符号，严格锁定到1.6.3或1.7.0，避免拉取到带有高级KTS语法的最新版
-          sed -i 's/dynamic_color: .*/dynamic_color: 1.6.3/' pubspec.yaml
+          # 锁定为 1.6.8，既兼容 flutter_test 的依赖要求，又避开 1.7.x 的 KTS 报错
+          sed -i 's/dynamic_color: .*/dynamic_color: 1.6.8/' pubspec.yaml
           cat pubspec.yaml | grep dynamic_color
 
       - name: 获取项目依赖
