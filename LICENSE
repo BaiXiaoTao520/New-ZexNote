@@ -1,0 +1,36 @@
+ZexNote Custom License Agreement
+Copyright (c) 2026 BaiXiaoTao520
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to use,
+study, run, inspect and modify the Software for personal, non-commercial purposes,
+subject to the following conditions:
+
+1. This software is only allowed for personal non-commercial use. It is prohibited
+to sell this software or modified derivative versions for commercial purposes,
+package for payment, embed advertisements, or distribute for profit.
+
+2. Any modified or derivative versions must retain the original copyright notice
+and the text of this license. Derivative works must also follow this agreement
+and cannot be changed to closed-source licenses.
+
+3. It is forbidden to remove the identification information about ZexNote and
+the original author inside the software.
+
+4. The software is provided as-is without warranty. The author is not liable for
+software failures, data loss, or device damage. Users shall bear all risks arising
+from the use of this software.
+
+5. It is prohibited to use the code of this project for black-gray industry or
+malicious cracking tools.
+
+6. Fork of this repository is allowed, but releasing Release versions must
+retain the original update detection logic.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
