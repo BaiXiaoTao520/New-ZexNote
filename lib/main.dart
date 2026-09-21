@@ -321,13 +321,13 @@ class _UpdateDialogState extends State<UpdateDialog> {
 class NoteHomePage extends StatelessWidget {
   const NoteHomePage({super.key});
   @override
-  Widget build(BuildContext c) => const Center(child: Text("便签主页"));
+  Widget build(BuildContext context) => const Center(child: Text("便签主页"));
 }
 
 class ArchivePage extends StatelessWidget {
   const ArchivePage({super.key});
   @override
-  Widget build(BuildContext c) => const Center(child: Text("归档页面"));
+  Widget build(BuildContext context) => const Center(child: Text("归档页面"));
 }
 
 class SettingPage extends StatefulWidget {
