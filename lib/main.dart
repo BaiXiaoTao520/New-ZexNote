@@ -519,13 +519,21 @@ class _MainPageState extends State<MainPage> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
-    final navigationBackground = colorScheme.surfaceContainerHighest.withAlpha(isDark ? 236 : 232);
-    final navigationBorder = isDark
-        ? Colors.white.withAlpha(28)
-        : colorScheme.outlineVariant.withAlpha(150);
-    final navigationShadow = isDark
-        ? Colors.black.withAlpha(100)
-        : Colors.black.withAlpha(35);
+    final navigationBackground = colorScheme.surfaceContainerHighest.withAlpha(
+      navigationBlurEnabled
+          ? (isDark ? 150 : 138)
+          : 255,
+    );
+    final navigationBorder = navigationBlurEnabled
+        ? (isDark
+            ? Colors.white.withAlpha(48)
+            : colorScheme.outlineVariant.withAlpha(185))
+        : (isDark
+            ? Colors.white.withAlpha(28)
+            : colorScheme.outlineVariant.withAlpha(150));
+    final navigationShadow = navigationBlurEnabled
+        ? (isDark ? Colors.black.withAlpha(120) : Colors.black.withAlpha(48))
+        : (isDark ? Colors.black.withAlpha(100) : Colors.black.withAlpha(35));
     final selectedNavigationBackground = isDark
         ? colorScheme.primary.withAlpha(190)
         : colorScheme.primaryContainer.withAlpha(245);
@@ -571,8 +579,8 @@ class _MainPageState extends State<MainPage> {
               borderRadius: BorderRadius.circular(34),
               child: BackdropFilter(
                 filter: ImageFilter.blur(
-                  sigmaX: navigationBlurEnabled ? 18 : 0,
-                  sigmaY: navigationBlurEnabled ? 18 : 0,
+                  sigmaX: navigationBlurEnabled ? 26 : 0,
+                  sigmaY: navigationBlurEnabled ? 26 : 0,
                 ),
                 child: Container(
                   height: 68,
@@ -1205,6 +1213,7 @@ class _NoteEditPageState extends State<NoteEditPage> {
     Colors.pink.shade100,
     Colors.blue.shade100,
     Colors.purple.shade100,
+    Colors.black,
   ];
 
   @override
