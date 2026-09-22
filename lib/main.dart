@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
@@ -99,6 +100,12 @@ class Note {
         createTime: DateTime.parse(json["createTime"]),
         isArchived: json["isArchived"] ?? false,
       );
+}
+
+Color noteTextColor(Color background) {
+  return background.computeLuminance() > 0.55
+      ? const Color(0xFF171717)
+      : Colors.white;
 }
 
 class UpdateInfo {
@@ -215,6 +222,7 @@ class _MainPageState extends State<MainPage> {
   final PageController pageCtrl = PageController();
   List<Note> notes = [];
   final Set<String> selectedNoteIds = <String>{};
+  final Set<String> selectedArchivedNoteIds = <String>{};
 
   @override
   void initState() {
@@ -289,6 +297,7 @@ class _MainPageState extends State<MainPage> {
   }
 
   bool get selectionMode => selectedNoteIds.isNotEmpty;
+  bool get archiveSelectionMode => selectedArchivedNoteIds.isNotEmpty;
 
   void toggleNoteSelection(Note note) {
     setState(() {
@@ -296,6 +305,29 @@ class _MainPageState extends State<MainPage> {
         selectedNoteIds.remove(note.id);
       } else {
         selectedNoteIds.add(note.id);
+      }
+    });
+  }
+
+  void toggleArchivedNoteSelection(Note note) {
+    setState(() {
+      if (selectedArchivedNoteIds.contains(note.id)) {
+        selectedArchivedNoteIds.remove(note.id);
+      } else {
+        selectedArchivedNoteIds.add(note.id);
+      }
+    });
+  }
+
+  void toggleArchivedSelectAll() {
+    final archivedIds = notes.where((note) => note.isArchived).map((note) => note.id).toSet();
+    setState(() {
+      if (archivedIds.isNotEmpty && selectedArchivedNoteIds.length == archivedIds.length) {
+        selectedArchivedNoteIds.clear();
+      } else {
+        selectedArchivedNoteIds
+          ..clear()
+          ..addAll(archivedIds);
       }
     });
   }
@@ -317,16 +349,27 @@ class _MainPageState extends State<MainPage> {
     return await showDialog<bool>(
           context: context,
           builder: (dialogContext) => AlertDialog(
-            title: Text(title),
+            title: Row(
+              children: [
+                Icon(Icons.delete_forever, color: Theme.of(dialogContext).colorScheme.error),
+                const SizedBox(width: 8),
+                Expanded(child: Text(title)),
+              ],
+            ),
             content: Text(content),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(dialogContext, false),
                 child: const Text("取消"),
               ),
-              FilledButton(
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(dialogContext).colorScheme.error,
+                  foregroundColor: Theme.of(dialogContext).colorScheme.onError,
+                ),
                 onPressed: () => Navigator.pop(dialogContext, true),
-                child: const Text("删除"),
+                icon: const Icon(Icons.delete_forever),
+                label: const Text("删除"),
               ),
             ],
           ),
@@ -334,20 +377,22 @@ class _MainPageState extends State<MainPage> {
         false;
   }
 
-  Future<void> deleteNotes(Iterable<Note> notesToDelete) async {
+  Future<bool> deleteNotes(Iterable<Note> notesToDelete) async {
     final ids = notesToDelete.map((note) => note.id).toSet();
-    if (ids.isEmpty) return;
+    if (ids.isEmpty) return false;
     final confirmed = await _confirmDelete(
       ids.length == 1 ? "删除便签" : "删除已选便签",
       "删除后将无法恢复，确定要删除吗？",
     );
-    if (!confirmed || !mounted) return;
+    if (!confirmed || !mounted) return false;
 
     setState(() {
       notes.removeWhere((note) => ids.contains(note.id));
       selectedNoteIds.removeAll(ids);
+      selectedArchivedNoteIds.removeAll(ids);
     });
     await saveNotesToStorage();
+    return true;
   }
 
   void openEditPage([Note? existing]) {
@@ -364,9 +409,15 @@ class _MainPageState extends State<MainPage> {
               } else {
                 notes[index] = savedNote;
               }
+              if (savedNote.isArchived) {
+                selectedNoteIds.remove(savedNote.id);
+              } else {
+                selectedArchivedNoteIds.remove(savedNote.id);
+              }
             });
             saveNotesToStorage();
           },
+          onDelete: (note) => deleteNotes([note]),
         ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return SlideTransition(
@@ -381,81 +432,138 @@ class _MainPageState extends State<MainPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final navigationBackground = colorScheme.surfaceContainerHighest.withAlpha(isDark ? 236 : 232);
+    final navigationBorder = isDark
+        ? Colors.white.withAlpha(28)
+        : colorScheme.outlineVariant.withAlpha(150);
+    final navigationShadow = isDark
+        ? Colors.black.withAlpha(100)
+        : Colors.black.withAlpha(35);
+    final selectedNavigationBackground = isDark
+        ? colorScheme.primary.withAlpha(190)
+        : colorScheme.primaryContainer.withAlpha(245);
+    final selectedNavigationForeground = isDark
+        ? colorScheme.onPrimary
+        : colorScheme.onPrimaryContainer;
+    final unselectedNavigationForeground = colorScheme.onSurfaceVariant;
+    final pageSelectionMode = currentIndex == 0 ? selectionMode : archiveSelectionMode;
+    final pageSelectedNoteIds = currentIndex == 0 ? selectedNoteIds : selectedArchivedNoteIds;
     return Scaffold(
-      body: PageView(
-        controller: pageCtrl,
-        onPageChanged: (index) => setState(() => currentIndex = index),
+      body: Stack(
         children: [
-          NoteHomePage(
-            notes: notes,
-            selectionMode: selectionMode,
-            selectedNoteIds: selectedNoteIds,
-            onOpenNote: openEditPage,
-            onToggleSelection: toggleNoteSelection,
-            onToggleSelectAll: toggleSelectAll,
-            onDeleteNote: (note) => deleteNotes([note]),
-          ),
-          ArchivePage(notes: notes),
-          SettingPage(onCheckUpdate: () => checkVersion(showNoUpdateToast: true)),
-        ],
-      ),
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-        child: Container(
-          height: 60,
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(30),
-            boxShadow: const [
-              BoxShadow(color: Color(0x1A000000), blurRadius: 10, offset: Offset(0, 4)),
+          PageView(
+            controller: pageCtrl,
+            onPageChanged: (index) => setState(() => currentIndex = index),
+            children: [
+              NoteHomePage(
+                notes: notes,
+                selectionMode: selectionMode,
+                selectedNoteIds: selectedNoteIds,
+                onOpenNote: openEditPage,
+                onToggleSelection: toggleNoteSelection,
+                onToggleSelectAll: toggleSelectAll,
+                onDeleteNote: (note) => deleteNotes([note]),
+              ),
+              ArchivePage(
+                notes: notes,
+                selectionMode: archiveSelectionMode,
+                selectedNoteIds: selectedArchivedNoteIds,
+                onOpenNote: openEditPage,
+                onToggleSelection: toggleArchivedNoteSelection,
+                onToggleSelectAll: toggleArchivedSelectAll,
+                onDeleteNote: (note) => deleteNotes([note]),
+              ),
+              SettingPage(onCheckUpdate: () => checkVersion(showNoUpdateToast: true)),
             ],
           ),
-          child: Row(
-            children: List.generate(3, (index) {
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    pageCtrl.animateToPage(
-                      index,
-                      duration: const Duration(milliseconds: 250),
-                      curve: Curves.easeInOut,
-                    );
-                  },
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 250),
-                        decoration: BoxDecoration(
-                          color: currentIndex == index
-                              ? Theme.of(context).colorScheme.primaryContainer
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(24),
-                        ),
-                        margin: const EdgeInsets.symmetric(horizontal: 8),
-                      ),
-                      Icon(
-                        index == 0 ? Icons.note : index == 1 ? Icons.archive : Icons.settings,
-                        color: currentIndex == index
-                            ? Theme.of(context).colorScheme.onPrimaryContainer
-                            : Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+          Positioned(
+            left: 24,
+            right: 24,
+            bottom: 16,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(34),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                child: Container(
+                  height: 68,
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: navigationBackground,
+                    borderRadius: BorderRadius.circular(34),
+                    border: Border.all(color: navigationBorder),
+                    boxShadow: [
+                      BoxShadow(color: navigationShadow, blurRadius: 22, offset: const Offset(0, 8)),
                     ],
                   ),
+                  child: Row(
+                    children: List.generate(3, (index) {
+                      final selected = currentIndex == index;
+                      return Expanded(
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(28),
+                            onTap: () {
+                              pageCtrl.animateToPage(
+                                index,
+                                duration: const Duration(milliseconds: 250),
+                                curve: Curves.easeInOut,
+                              );
+                            },
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 220),
+                              decoration: BoxDecoration(
+                                color: selected
+                                    ? selectedNavigationBackground
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(28),
+                              ),
+                              child: Icon(
+                                index == 0
+                                    ? Icons.note_outlined
+                                    : index == 1
+                                        ? Icons.archive_outlined
+                                        : Icons.settings_outlined,
+                                color: selected
+                                    ? selectedNavigationForeground
+                                    : unselectedNavigationForeground,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
                 ),
-              );
-            }),
+              ),
+            ),
           ),
-        ),
+          if (currentIndex == 0 || (currentIndex == 1 && pageSelectionMode))
+            Positioned(
+              right: 24,
+              bottom: 100,
+              child: FloatingActionButton(
+                backgroundColor: pageSelectionMode
+                    ? colorScheme.error
+                    : colorScheme.primaryContainer,
+                foregroundColor: pageSelectionMode
+                    ? colorScheme.onError
+                    : colorScheme.onPrimaryContainer,
+                onPressed: pageSelectionMode
+                    ? () => deleteNotes(
+                          notes.where((note) => pageSelectedNoteIds.contains(note.id)),
+                        )
+                    : currentIndex == 0
+                        ? () => openEditPage()
+                        : null,
+                child: Icon(pageSelectionMode ? Icons.delete_forever : Icons.add),
+              ),
+            ),
+        ],
       ),
-      floatingActionButton: currentIndex == 0
-          ? FloatingActionButton(
-              onPressed: selectionMode
-                  ? () => deleteNotes(notes.where((note) => selectedNoteIds.contains(note.id)))
-                  : () => openEditPage(),
-              child: Icon(selectionMode ? Icons.delete : Icons.add),
-            )
-          : null,
     );
   }
 
@@ -776,11 +884,12 @@ class NoteHomePage extends StatelessWidget {
       body: activeNotes.isEmpty
           ? const Center(child: Text("暂无便签，点击右下角加号新建"))
           : ListView.builder(
-              padding: const EdgeInsets.only(bottom: 80),
+              padding: const EdgeInsets.only(bottom: 160),
               itemCount: activeNotes.length,
               itemBuilder: (context, index) {
                 final note = activeNotes[index];
                 final selected = selectedNoteIds.contains(note.id);
+                final foregroundColor = noteTextColor(note.color);
                 return Card(
                   color: note.color,
                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -795,15 +904,20 @@ class NoteHomePage extends StatelessWidget {
                         : null,
                     title: Text(
                       note.title,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        color: foregroundColor,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     subtitle: Text(
                       note.content,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: foregroundColor.withAlpha(210)),
                     ),
                     trailing: IconButton(
                       tooltip: "删除便签",
+                      color: foregroundColor,
                       onPressed: () => onDeleteNote(note),
                       icon: const Icon(Icons.delete_outline),
                     ),
@@ -817,28 +931,80 @@ class NoteHomePage extends StatelessWidget {
 
 class ArchivePage extends StatelessWidget {
   final List<Note> notes;
-  const ArchivePage({super.key, required this.notes});
+  final bool selectionMode;
+  final Set<String> selectedNoteIds;
+  final ValueChanged<Note> onOpenNote;
+  final ValueChanged<Note> onToggleSelection;
+  final VoidCallback onToggleSelectAll;
+  final ValueChanged<Note> onDeleteNote;
+
+  const ArchivePage({
+    super.key,
+    required this.notes,
+    required this.selectionMode,
+    required this.selectedNoteIds,
+    required this.onOpenNote,
+    required this.onToggleSelection,
+    required this.onToggleSelectAll,
+    required this.onDeleteNote,
+  });
 
   @override
   Widget build(BuildContext context) {
     final archivedNotes = notes.where((note) => note.isArchived).toList();
+    final allSelected = archivedNotes.isNotEmpty && selectedNoteIds.length == archivedNotes.length;
     return Scaffold(
-      appBar: AppBar(title: const Text("归档")),
+      appBar: AppBar(
+        title: Text(selectionMode ? "已选择 ${selectedNoteIds.length} 项" : "归档"),
+        actions: selectionMode
+            ? [
+                IconButton(
+                  tooltip: allSelected ? "取消全选" : "全选",
+                  onPressed: onToggleSelectAll,
+                  icon: Icon(allSelected ? Icons.deselect : Icons.select_all),
+                ),
+              ]
+            : null,
+      ),
       body: archivedNotes.isEmpty
           ? const Center(child: Text("暂无归档便签"))
           : ListView.builder(
-              padding: const EdgeInsets.only(bottom: 80),
+              padding: const EdgeInsets.only(bottom: 160),
               itemCount: archivedNotes.length,
               itemBuilder: (context, index) {
                 final note = archivedNotes[index];
+                final selected = selectedNoteIds.contains(note.id);
+                final foregroundColor = noteTextColor(note.color);
                 return Card(
+                  color: note.color,
                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: ListTile(
-                    title: Text(note.title),
+                    onTap: () => selectionMode ? onToggleSelection(note) : onOpenNote(note),
+                    onLongPress: () => onToggleSelection(note),
+                    leading: selectionMode
+                        ? Checkbox(
+                            value: selected,
+                            onChanged: (_) => onToggleSelection(note),
+                          )
+                        : null,
+                    title: Text(
+                      note.title,
+                      style: TextStyle(
+                        color: foregroundColor,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     subtitle: Text(
                       note.content,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: foregroundColor.withAlpha(210)),
+                    ),
+                    trailing: IconButton(
+                      tooltip: "删除便签",
+                      color: foregroundColor,
+                      onPressed: () => onDeleteNote(note),
+                      icon: const Icon(Icons.delete_outline),
                     ),
                   ),
                 );
@@ -851,11 +1017,13 @@ class ArchivePage extends StatelessWidget {
 class NoteEditPage extends StatefulWidget {
   final Note? existingNote;
   final ValueChanged<Note> onSave;
+  final Future<bool> Function(Note) onDelete;
 
   const NoteEditPage({
     super.key,
     required this.existingNote,
     required this.onSave,
+    required this.onDelete,
   });
 
   @override
@@ -866,6 +1034,7 @@ class _NoteEditPageState extends State<NoteEditPage> {
   late final TextEditingController titleCtrl;
   late final TextEditingController contentCtrl;
   late Color selectedColor;
+  late bool isArchived;
   bool hasUnsavedChanges = false;
 
   final colorOptions = [
@@ -882,6 +1051,7 @@ class _NoteEditPageState extends State<NoteEditPage> {
     titleCtrl = TextEditingController(text: widget.existingNote?.title ?? "");
     contentCtrl = TextEditingController(text: widget.existingNote?.content ?? "");
     selectedColor = widget.existingNote?.color ?? Colors.lightGreen.shade100;
+    isArchived = widget.existingNote?.isArchived ?? false;
     titleCtrl.addListener(_markChanged);
     contentCtrl.addListener(_markChanged);
   }
@@ -924,15 +1094,34 @@ class _NoteEditPageState extends State<NoteEditPage> {
     }
   }
 
-  void _showSaveOptions() {
-    final note = Note(
+  Note _buildNote() {
+    return Note(
       id: widget.existingNote?.id,
       title: titleCtrl.text.isEmpty ? "无标题" : titleCtrl.text,
       content: contentCtrl.text,
       color: selectedColor,
       createTime: widget.existingNote?.createTime ?? DateTime.now(),
-      isArchived: widget.existingNote?.isArchived ?? false,
+      isArchived: isArchived,
     );
+  }
+
+  void _toggleArchive() {
+    setState(() {
+      isArchived = !isArchived;
+      hasUnsavedChanges = true;
+    });
+  }
+
+  Future<void> _deleteNote() async {
+    final note = widget.existingNote;
+    if (note == null) return;
+    final deleted = await widget.onDelete(note);
+    if (!mounted) return;
+    if (deleted) Navigator.pop(context);
+  }
+
+  void _showSaveOptions() {
+    final note = _buildNote();
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -946,7 +1135,7 @@ class _NoteEditPageState extends State<NoteEditPage> {
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("已保存")));
               Navigator.pop(context);
             },
-            child: const Text("保存并退出"),
+            child: const Text("应用内保存并退出"),
           ),
           TextButton(
             onPressed: () async {
@@ -980,9 +1169,24 @@ class _NoteEditPageState extends State<NoteEditPage> {
           title: const Text("编辑便签"),
           actions: [
             IconButton(
+              tooltip: isArchived ? "移出归档" : "归档",
+              onPressed: _toggleArchive,
+              color: isArchived
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.onSurfaceVariant,
+              icon: Icon(isArchived ? Icons.archive : Icons.archive_outlined),
+            ),
+            IconButton(
+              tooltip: "删除",
+              onPressed: widget.existingNote == null ? null : _deleteNote,
+              color: Theme.of(context).colorScheme.error,
+              icon: const Icon(Icons.delete_outline),
+            ),
+            IconButton(
               tooltip: "保存",
               onPressed: _showSaveOptions,
-              icon: const Icon(Icons.save),
+              color: Theme.of(context).colorScheme.primary,
+              icon: const Icon(Icons.save_outlined),
             ),
           ],
         ),
@@ -1007,9 +1211,32 @@ class _NoteEditPageState extends State<NoteEditPage> {
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Text(
+                    "颜色预览",
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: selectedColor,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.outlineVariant,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
               SizedBox(
-                height: 60,
+                height: 48,
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
                   itemCount: colorOptions.length,
@@ -1021,13 +1248,16 @@ class _NoteEditPageState extends State<NoteEditPage> {
                         hasUnsavedChanges = true;
                       }),
                       child: Container(
-                        width: 50,
-                        margin: const EdgeInsets.symmetric(horizontal: 8),
+                        width: 40,
+                        margin: const EdgeInsets.symmetric(horizontal: 6),
                         decoration: BoxDecoration(
                           color: color,
                           shape: BoxShape.circle,
                           border: selectedColor == color
-                              ? Border.all(color: Colors.black, width: 2)
+                              ? Border.all(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  width: 2,
+                                )
                               : null,
                         ),
                       ),
@@ -1060,7 +1290,7 @@ class SettingPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text("设置")),
       body: ListView(
-        padding: const EdgeInsets.only(bottom: 80),
+        padding: const EdgeInsets.only(bottom: 160),
         children: [
           ValueListenableBuilder<bool>(
             valueListenable: globalDynamicColorNotifier,
@@ -1130,6 +1360,7 @@ class _UpdateSettingsPageState extends State<UpdateSettingsPage> {
     return Scaffold(
       appBar: AppBar(title: const Text("更新设置")),
       body: ListView(
+        padding: const EdgeInsets.only(bottom: 160),
         children: [
           SwitchListTile(
             secondary: const Icon(Icons.update),
