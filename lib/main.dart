@@ -531,8 +531,10 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
   Future<void> _confirmInstallPermission() async {
     if (!mounted || downloading) return;
     final enabled = await _canInstallPackages();
+    if (!mounted) return;
     if (enabled) {
       final path = await SharedPreferences.getInstance().then((prefs) => prefs.getString("pending_apk_path"));
+      if (!mounted) return;
       if (path != null) await _installApk(path);
       return;
     }
@@ -550,15 +552,18 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
           FilledButton(
             onPressed: () async {
               Navigator.pop(dialogContext);
-              if (await _canInstallPackages()) {
+              final enabled = await _canInstallPackages();
+              if (!mounted) return;
+              if (enabled) {
                 final prefs = await SharedPreferences.getInstance();
+                if (!mounted) return;
                 final path = prefs.getString("pending_apk_path");
                 if (path != null) await _installApk(path);
-              } else if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("仍未开启安装权限，请稍后重试")),
-                );
+                return;
               }
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("仍未开启安装权限，请稍后重试")),
+              );
             },
             child: const Text("再次检查"),
           ),
