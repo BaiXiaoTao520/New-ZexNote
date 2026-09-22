@@ -13,10 +13,79 @@ import 'package:url_launcher/url_launcher.dart';
 
 const String repository = "BaiXiaoTao520/New-ZexNote";
 const String repositoryUrl = "https://github.com/$repository";
-const String currentVersion = "1.0.2";
+const String currentVersion = "1.0.3";
 const MethodChannel installerChannel = MethodChannel("com.zex.note/installer");
 
 final ValueNotifier<bool> globalDynamicColorNotifier = ValueNotifier(true);
+
+void showAppToast(BuildContext context, String message, {bool isError = false}) {
+  final overlay = Overlay.of(context, rootOverlay: true);
+  late final OverlayEntry entry;
+  entry = OverlayEntry(
+    builder: (overlayContext) {
+      final colorScheme = Theme.of(overlayContext).colorScheme;
+      final backgroundColor = isError
+          ? colorScheme.errorContainer
+          : colorScheme.inverseSurface;
+      final foregroundColor = isError
+          ? colorScheme.onErrorContainer
+          : colorScheme.onInverseSurface;
+      final bottomOffset = MediaQuery.of(overlayContext).viewPadding.bottom + 104;
+      return Positioned(
+        left: 24,
+        right: 24,
+        bottom: bottomOffset,
+        child: IgnorePointer(
+          child: Center(
+            child: Material(
+              color: Colors.transparent,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 360),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                  decoration: BoxDecoration(
+                    color: backgroundColor.withAlpha(242),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: foregroundColor.withAlpha(35)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withAlpha(35),
+                        blurRadius: 16,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isError ? Icons.error_outline : Icons.check_circle_outline,
+                        color: foregroundColor,
+                        size: 19,
+                      ),
+                      const SizedBox(width: 9),
+                      Flexible(
+                        child: Text(
+                          message,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: foregroundColor, fontSize: 14),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    },
+  );
+  overlay.insert(entry);
+  Timer(const Duration(seconds: 2), () {
+    if (entry.mounted) entry.remove();
+  });
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -274,18 +343,14 @@ class _MainPageState extends State<MainPage> {
 
     if (update == null || update.tagName.isEmpty) {
       if (showNoUpdateToast) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("无法获取版本信息，请检查网络后重试")),
-        );
+        showAppToast(context, "无法获取版本信息，请检查网络后重试", isError: true);
       }
       return;
     }
 
     if (compareVersions(update.displayVersion, currentVersion) <= 0) {
       if (showNoUpdateToast) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("当前已是最新版本")),
-        );
+        showAppToast(context, "当前已是最新版本");
       }
       return;
     }
@@ -513,23 +578,28 @@ class _MainPageState extends State<MainPage> {
                                 curve: Curves.easeInOut,
                               );
                             },
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 220),
-                              decoration: BoxDecoration(
-                                color: selected
-                                    ? selectedNavigationBackground
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(28),
-                              ),
-                              child: Icon(
-                                index == 0
-                                    ? Icons.note_outlined
-                                    : index == 1
-                                        ? Icons.archive_outlined
-                                        : Icons.settings_outlined,
-                                color: selected
-                                    ? selectedNavigationForeground
-                                    : unselectedNavigationForeground,
+                            child: Center(
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 220),
+                                width: 80,
+                                height: 48,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: selected
+                                      ? selectedNavigationBackground
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                                child: Icon(
+                                  index == 0
+                                      ? Icons.sticky_note_2_outlined
+                                      : index == 1
+                                          ? Icons.archive_outlined
+                                          : Icons.settings_outlined,
+                                  color: selected
+                                      ? selectedNavigationForeground
+                                      : unselectedNavigationForeground,
+                                ),
                               ),
                             ),
                           ),
@@ -629,9 +699,7 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
       await installerChannel.invokeMethod<void>("installApk", {"path": path});
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("无法打开系统安装器")),
-        );
+        showAppToast(context, "无法打开系统安装器", isError: true);
       }
     }
   }
@@ -669,9 +737,7 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
                 if (path != null) await _installApk(path);
                 return;
               }
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("仍未开启安装权限，请稍后重试")),
-              );
+              showAppToast(context, "仍未开启安装权限，请稍后重试", isError: true);
             },
             child: const Text("再次检查"),
           ),
@@ -751,6 +817,7 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
         downloading = false;
         status = "下载完成，准备安装";
       });
+      showAppToast(context, "下载完成，准备安装");
       await _prepareInstall(file.path);
     } catch (_) {
       await sink?.close();
@@ -759,9 +826,7 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
           downloading = false;
           status = "下载失败";
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("下载失败，请检查网络后重试")),
-        );
+        showAppToast(context, "下载失败，请检查网络后重试", isError: true);
       }
     } finally {
       client.close();
@@ -1132,7 +1197,7 @@ class _NoteEditPageState extends State<NoteEditPage> {
             onPressed: () {
               widget.onSave(note);
               Navigator.pop(dialogContext);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("已保存")));
+              showAppToast(context, "已保存");
               Navigator.pop(context);
             },
             child: const Text("应用内保存并退出"),
@@ -1142,11 +1207,8 @@ class _NoteEditPageState extends State<NoteEditPage> {
               Navigator.pop(dialogContext);
               final saved = await _saveNoteAsText(note);
               if (saved) {
-                try {
-                  await installerChannel.invokeMethod<void>("showToast", {
-                    "message": "TXT 文件已保存",
-                  });
-                } catch (_) {}
+                if (!mounted) return;
+                showAppToast(context, "TXT 文件已保存");
               }
             },
             child: const Text("保存为 TXT 文件"),
@@ -1211,21 +1273,21 @@ class _NoteEditPageState extends State<NoteEditPage> {
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Row(
                 children: [
                   Text(
                     "颜色预览",
-                    style: Theme.of(context).textTheme.labelLarge,
+                    style: Theme.of(context).textTheme.labelMedium,
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 180),
-                      height: 30,
+                      height: 24,
                       decoration: BoxDecoration(
                         color: selectedColor,
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(7),
                         border: Border.all(
                           color: Theme.of(context).colorScheme.outlineVariant,
                         ),
@@ -1234,9 +1296,9 @@ class _NoteEditPageState extends State<NoteEditPage> {
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               SizedBox(
-                height: 48,
+                height: 40,
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
                   itemCount: colorOptions.length,
@@ -1248,8 +1310,8 @@ class _NoteEditPageState extends State<NoteEditPage> {
                         hasUnsavedChanges = true;
                       }),
                       child: Container(
-                        width: 40,
-                        margin: const EdgeInsets.symmetric(horizontal: 6),
+                        width: 34,
+                        margin: const EdgeInsets.symmetric(horizontal: 5),
                         decoration: BoxDecoration(
                           color: color,
                           shape: BoxShape.circle,
@@ -1265,7 +1327,7 @@ class _NoteEditPageState extends State<NoteEditPage> {
                   },
                 ),
               ),
-              const SizedBox(height: 80),
+              SizedBox(height: MediaQuery.of(context).viewPadding.bottom + 16),
             ],
           ),
         ),
@@ -1393,9 +1455,7 @@ class AboutPage extends StatelessWidget {
       mode: LaunchMode.externalApplication,
     );
     if (!launched && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("无法打开浏览器")),
-      );
+      showAppToast(context, "无法打开浏览器", isError: true);
     }
   }
 
