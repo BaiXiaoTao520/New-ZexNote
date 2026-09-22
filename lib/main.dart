@@ -7,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -555,7 +554,7 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
                 final prefs = await SharedPreferences.getInstance();
                 final path = prefs.getString("pending_apk_path");
                 if (path != null) await _installApk(path);
-              } else if (mounted) {
+              } else if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text("仍未开启安装权限，请稍后重试")),
                 );
@@ -906,6 +905,20 @@ class _NoteEditPageState extends State<NoteEditPage> {
     return result ?? false;
   }
 
+  Future<bool> _saveNoteAsText(Note note) async {
+    final safeTitle = note.title.replaceAll(RegExp(r'[\\/:*?"<>|]'), "_").trim();
+    final filename = "${safeTitle.isEmpty ? "无标题" : safeTitle}.txt";
+    try {
+      return await installerChannel.invokeMethod<bool>("saveTextFile", {
+            "filename": filename,
+            "content": "${note.title}\n\n${note.content}",
+          }) ??
+          false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   void _showSaveOptions() {
     final note = Note(
       id: widget.existingNote?.id,
@@ -933,12 +946,16 @@ class _NoteEditPageState extends State<NoteEditPage> {
           TextButton(
             onPressed: () async {
               Navigator.pop(dialogContext);
-              await Share.share(
-                "${note.title}\n\n${note.content}",
-                subject: note.title,
-              );
+              final saved = await _saveNoteAsText(note);
+              if (saved) {
+                try {
+                  await installerChannel.invokeMethod<void>("showToast", {
+                    "message": "TXT 文件已保存",
+                  });
+                } catch (_) {}
+              }
             },
-            child: const Text("分享便签"),
+            child: const Text("保存为 TXT 文件"),
           ),
         ],
       ),

@@ -14,8 +14,6 @@ dependencies:
   shared_preferences: ^2.3.2
   path_provider: ^2.1.4
   url_launcher: ^6.3.0
-  # 移除崩溃率极高的 file_picker，换用安全的 share_plus
-  share_plus: ^10.0.0
 
 dev_dependencies:
   flutter_test:
