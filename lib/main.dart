@@ -13,10 +13,11 @@ import 'package:url_launcher/url_launcher.dart';
 
 const String repository = "BaiXiaoTao520/New-ZexNote";
 const String repositoryUrl = "https://github.com/$repository";
-const String currentVersion = "1.0.5";
+const String currentVersion = "1.1.0";
 const MethodChannel installerChannel = MethodChannel("com.zex.note/installer");
 
 final ValueNotifier<bool> globalDynamicColorNotifier = ValueNotifier(true);
+final ValueNotifier<bool> globalNavigationBlurNotifier = ValueNotifier(true);
 
 void showAppToast(BuildContext context, String message, {bool isError = false}) {
   final overlay = Overlay.of(context, rootOverlay: true);
@@ -91,6 +92,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
   globalDynamicColorNotifier.value = prefs.getBool("dynamicColor") ?? true;
+  globalNavigationBlurNotifier.value = prefs.getBool("navigationBlur") ?? true;
   runApp(const ZexNoteApp());
 }
 
@@ -292,11 +294,13 @@ class _MainPageState extends State<MainPage> {
   List<Note> notes = [];
   final Set<String> selectedNoteIds = <String>{};
   final Set<String> selectedArchivedNoteIds = <String>{};
+  bool navigationBlurEnabled = true;
 
   @override
   void initState() {
     super.initState();
     loadNotesFromStorage();
+    loadNavigationBlurPreference();
     autoCheckUpdate();
   }
 
@@ -306,6 +310,15 @@ class _MainPageState extends State<MainPage> {
     if (notesJson != null && mounted) {
       final decoded = jsonDecode(notesJson) as List<dynamic>;
       setState(() => notes = decoded.map((item) => Note.fromJson(item)).toList());
+    }
+  }
+
+  Future<void> loadNavigationBlurPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        navigationBlurEnabled = prefs.getBool("navigationBlur") ?? true;
+      });
     }
   }
 
@@ -557,7 +570,10 @@ class _MainPageState extends State<MainPage> {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(34),
               child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                filter: ImageFilter.blur(
+                  sigmaX: navigationBlurEnabled ? 18 : 0,
+                  sigmaY: navigationBlurEnabled ? 18 : 0,
+                ),
                 child: Container(
                   height: 68,
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -1446,6 +1462,23 @@ class SettingPage extends StatelessWidget {
                 final prefs = await SharedPreferences.getInstance();
                 await prefs.setBool("dynamicColor", value);
                 globalDynamicColorNotifier.value = value;
+              },
+            ),
+          ),
+          ValueListenableBuilder<bool>(
+            valueListenable: globalNavigationBlurNotifier,
+            builder: (context, blurEnabled, _) => SwitchListTile(
+              secondary: const Icon(Icons.blur_on),
+              title: const Text("导航栏毛玻璃模糊"),
+              subtitle: const Text("重启软件后生效"),
+              value: blurEnabled,
+              onChanged: (value) async {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool("navigationBlur", value);
+                globalNavigationBlurNotifier.value = value;
+                if (context.mounted) {
+                  showAppToast(context, "重启软件后生效");
+                }
               },
             ),
           ),
