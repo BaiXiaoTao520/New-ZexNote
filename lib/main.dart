@@ -13,7 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 const String repository = "BaiXiaoTao520/New-ZexNote";
 const String repositoryUrl = "https://github.com/$repository";
-const String currentVersion = "1.0.3";
+const String currentVersion = "1.0.5";
 const MethodChannel installerChannel = MethodChannel("com.zex.note/installer");
 
 final ValueNotifier<bool> globalDynamicColorNotifier = ValueNotifier(true);
@@ -355,9 +355,15 @@ class _MainPageState extends State<MainPage> {
       return;
     }
 
+    final shouldDownload = await showDialog<bool>(
+          context: context,
+          builder: (context) => UpdateDialog(update: update),
+        ) ??
+        false;
+    if (!mounted || !shouldDownload || update.downloadUrl.isEmpty) return;
     await showDialog<void>(
       context: context,
-      builder: (context) => UpdateDialog(update: update),
+      builder: (context) => UpdateDialog(update: update, downloadOnly: true),
     );
   }
 
@@ -569,36 +575,45 @@ class _MainPageState extends State<MainPage> {
                       return Expanded(
                         child: Material(
                           color: Colors.transparent,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(28),
-                            onTap: () {
-                              pageCtrl.animateToPage(
-                                index,
-                                duration: const Duration(milliseconds: 250),
-                                curve: Curves.easeInOut,
-                              );
-                            },
-                            child: Center(
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 220),
-                                width: 80,
-                                height: 48,
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                  color: selected
-                                      ? selectedNavigationBackground
-                                      : Colors.transparent,
+                          child: Center(
+                            child: SizedBox(
+                              width: 80,
+                              height: 48,
+                              child: Material(
+                                color: Colors.transparent,
+                                borderRadius: BorderRadius.circular(24),
+                                clipBehavior: Clip.antiAlias,
+                                child: InkWell(
                                   borderRadius: BorderRadius.circular(24),
-                                ),
-                                child: Icon(
-                                  index == 0
-                                      ? Icons.sticky_note_2_outlined
-                                      : index == 1
-                                          ? Icons.archive_outlined
-                                          : Icons.settings_outlined,
-                                  color: selected
-                                      ? selectedNavigationForeground
-                                      : unselectedNavigationForeground,
+                                  onTap: () {
+                                    setState(() => currentIndex = index);
+                                    pageCtrl.animateToPage(
+                                      index,
+                                      duration: const Duration(milliseconds: 220),
+                                      curve: Curves.easeInOut,
+                                    );
+                                  },
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 220),
+                                    curve: Curves.easeInOut,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      color: selected
+                                          ? selectedNavigationBackground
+                                          : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(24),
+                                    ),
+                                    child: Icon(
+                                      index == 0
+                                          ? Icons.sticky_note_2_outlined
+                                          : index == 1
+                                              ? Icons.archive_outlined
+                                              : Icons.settings_outlined,
+                                      color: selected
+                                          ? selectedNavigationForeground
+                                          : unselectedNavigationForeground,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
@@ -646,7 +661,13 @@ class _MainPageState extends State<MainPage> {
 
 class UpdateDialog extends StatefulWidget {
   final UpdateInfo update;
-  const UpdateDialog({super.key, required this.update});
+  final bool downloadOnly;
+
+  const UpdateDialog({
+    super.key,
+    required this.update,
+    this.downloadOnly = false,
+  });
 
   @override
   State<UpdateDialog> createState() => _UpdateDialogState();
@@ -658,12 +679,17 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
   int downloadedBytes = 0;
   int totalBytes = 0;
   bool waitingForPermissionReturn = false;
+  String? downloadedPath;
+  http.Client? downloadClient;
   String status = "准备下载";
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    if (widget.downloadOnly) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _downloadAndInstall());
+    }
   }
 
   @override
@@ -781,14 +807,24 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
     );
   }
 
+  Future<void> _cancelDownload() async {
+    downloadClient?.close();
+    if (mounted) Navigator.pop(context);
+  }
+
   Future<void> _downloadAndInstall() async {
-    if (downloading || widget.update.downloadUrl.isEmpty) return;
+    if (!mounted || downloading || widget.update.downloadUrl.isEmpty) return;
     setState(() {
       downloading = true;
+      downloadedPath = null;
+      downloadedBytes = 0;
+      totalBytes = 0;
+      progress = 0;
       status = "正在下载";
     });
 
     final client = http.Client();
+    downloadClient = client;
     IOSink? sink;
     try {
       final response = await client.send(http.Request("GET", Uri.parse(widget.update.downloadUrl)));
@@ -815,10 +851,10 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
       if (!mounted) return;
       setState(() {
         downloading = false;
-        status = "下载完成，准备安装";
+        downloadedPath = file.path;
+        status = "下载完成";
       });
-      showAppToast(context, "下载完成，准备安装");
-      await _prepareInstall(file.path);
+      showAppToast(context, "下载完成");
     } catch (_) {
       await sink?.close();
       if (mounted) {
@@ -830,11 +866,17 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
       }
     } finally {
       client.close();
+      if (identical(downloadClient, client)) downloadClient = null;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (widget.downloadOnly) return _buildDownloadDialog(context);
+    return _buildInfoDialog(context);
+  }
+
+  Widget _buildInfoDialog(BuildContext context) {
     final hasDownload = widget.update.downloadUrl.isNotEmpty;
     return AlertDialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
@@ -842,7 +884,7 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
         children: [
           const Icon(Icons.system_update),
           const SizedBox(width: 8),
-          Expanded(child: Text("新版本 v${widget.update.displayVersion}")),
+          Expanded(child: Text("发现新版本 v${widget.update.displayVersion}")),
         ],
       ),
       content: SizedBox(
@@ -853,8 +895,13 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
           children: [
             Text("检测来源：${widget.update.source}"),
             const SizedBox(height: 12),
-            SizedBox(
-              height: 120,
+            Container(
+              height: 150,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(12),
+              ),
               child: SingleChildScrollView(
                 child: Text(
                   widget.update.updateLog.isEmpty ? "暂无更新日志" : widget.update.updateLog,
@@ -862,42 +909,76 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
                 ),
               ),
             ),
-            if (downloading || status == "下载完成，准备安装") ...[
-              const SizedBox(height: 16),
-              LinearProgressIndicator(value: totalBytes > 0 ? progress : null),
-              const SizedBox(height: 8),
-              Text(
-                totalBytes > 0
-                    ? "$status：${_formatBytes(downloadedBytes)} / ${_formatBytes(totalBytes)}"
-                    : status,
-              ),
-            ],
           ],
         ),
       ),
       actions: [
         TextButton(
-          onPressed: downloading ? null : () => Navigator.pop(context),
+          onPressed: () => Navigator.pop(context, false),
           child: const Text("稍后"),
         ),
         if (hasDownload)
           FilledButton.icon(
-            onPressed: downloading ? null : _downloadAndInstall,
+            onPressed: () => Navigator.pop(context, true),
             icon: const Icon(Icons.download),
-            label: const Text("应用内下载"),
+            label: const Text("应用内更新"),
           ),
         TextButton.icon(
-          onPressed: downloading
-              ? null
-              : () async {
-                  await launchUrl(
-                    Uri.parse(widget.update.releaseUrl),
-                    mode: LaunchMode.externalApplication,
-                  );
-                },
+          onPressed: () async {
+            await launchUrl(
+              Uri.parse(widget.update.releaseUrl),
+              mode: LaunchMode.externalApplication,
+            );
+          },
           icon: const Icon(Icons.open_in_new),
           label: const Text("浏览器下载"),
         ),
+      ],
+    );
+  }
+
+  Widget _buildDownloadDialog(BuildContext context) {
+    final completed = downloadedPath != null;
+    final failed = !downloading && status == "下载失败";
+    return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
+      title: Row(
+        children: [
+          const Icon(Icons.download),
+          const SizedBox(width: 8),
+          Expanded(child: Text("下载 v${widget.update.displayVersion}")),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          LinearProgressIndicator(value: totalBytes > 0 ? progress : null),
+          const SizedBox(height: 10),
+          Text(
+            totalBytes > 0 && !completed
+                ? "$status：${_formatBytes(downloadedBytes)} / ${_formatBytes(totalBytes)}"
+                : status,
+          ),
+        ],
+      ),
+      actions: [
+        if (downloading)
+          TextButton(
+            onPressed: _cancelDownload,
+            child: const Text("取消"),
+          ),
+        if (!downloading && !completed)
+          TextButton(
+            onPressed: failed ? _downloadAndInstall : () => Navigator.pop(context),
+            child: Text(failed ? "重试" : "取消"),
+          ),
+        if (completed)
+          FilledButton.icon(
+            onPressed: () => _prepareInstall(downloadedPath!),
+            icon: const Icon(Icons.install_mobile),
+            label: const Text("立即安装"),
+          ),
       ],
     );
   }
@@ -1344,7 +1425,7 @@ class _NoteEditPageState extends State<NoteEditPage> {
 }
 
 class SettingPage extends StatelessWidget {
-  final VoidCallback onCheckUpdate;
+  final Future<void> Function() onCheckUpdate;
   const SettingPage({super.key, required this.onCheckUpdate});
 
   @override
@@ -1396,7 +1477,7 @@ class SettingPage extends StatelessWidget {
 }
 
 class UpdateSettingsPage extends StatefulWidget {
-  final VoidCallback onCheckUpdate;
+  final Future<void> Function() onCheckUpdate;
   const UpdateSettingsPage({super.key, required this.onCheckUpdate});
 
   @override
@@ -1405,6 +1486,7 @@ class UpdateSettingsPage extends StatefulWidget {
 
 class _UpdateSettingsPageState extends State<UpdateSettingsPage> {
   bool autoCheck = true;
+  bool checking = false;
 
   @override
   void initState() {
@@ -1417,6 +1499,16 @@ class _UpdateSettingsPageState extends State<UpdateSettingsPage> {
     if (mounted) setState(() => autoCheck = prefs.getBool("autoCheckUpdate") ?? true);
   }
 
+  Future<void> _checkForUpdates() async {
+    if (checking) return;
+    setState(() => checking = true);
+    try {
+      await widget.onCheckUpdate();
+    } finally {
+      if (mounted) setState(() => checking = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1424,6 +1516,7 @@ class _UpdateSettingsPageState extends State<UpdateSettingsPage> {
       body: ListView(
         padding: const EdgeInsets.only(bottom: 160),
         children: [
+          if (checking) const LinearProgressIndicator(minHeight: 3),
           SwitchListTile(
             secondary: const Icon(Icons.update),
             title: const Text("启动时自动检查更新"),
@@ -1437,11 +1530,74 @@ class _UpdateSettingsPageState extends State<UpdateSettingsPage> {
           ),
           ListTile(
             leading: const Icon(Icons.search),
-            title: const Text("手动检查新版本"),
-            onTap: widget.onCheckUpdate,
+            title: const Text("检查更新"),
+            onTap: _checkForUpdates,
           ),
         ],
       ),
+    );
+  }
+}
+
+class ThirdPartyLicensesDialog extends StatelessWidget {
+  const ThirdPartyLicensesDialog({super.key});
+
+  static const licenseText = """
+ZexNote Custom License Agreement
+Copyright (c) 2026 BaiXiaoTao520
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to use,
+study, run, inspect and modify the Software for personal, non-commercial purposes,
+subject to the following conditions:
+
+1. This software is only allowed for personal non-commercial use. It is prohibited
+to sell this software or modified derivative versions for commercial purposes,
+package for payment, embed advertisements, or distribute for profit.
+
+2. Any modified or derivative versions must retain the original copyright notice
+and the text of this license. Derivative works must also follow this agreement
+and cannot be changed to closed-source licenses.
+
+3. It is forbidden to remove the identification information about ZexNote and
+the original author inside the software.
+
+4. The software is provided as-is without warranty. The author is not liable for
+software failures, data loss, or device damage. Users shall bear all risks arising
+from the use of this software.
+
+5. It is prohibited to use the code of this project for black-gray industry or
+malicious cracking tools.
+
+6. Fork of this repository is allowed, but releasing Release versions must
+retain the original update detection logic.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+""";
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text("第三方许可证"),
+      content: const SizedBox(
+        width: double.maxFinite,
+        height: 360,
+        child: SingleChildScrollView(
+          child: Text(licenseText, style: TextStyle(height: 1.5)),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("确定"),
+        ),
+      ],
     );
   }
 }
@@ -1503,6 +1659,16 @@ class AboutPage extends StatelessWidget {
                 subtitle: const Text("点击访问主页"),
                 trailing: const Icon(Icons.open_in_new, size: 18),
                 onTap: () => _openRepository(context),
+              ),
+              ListTile(
+                leading: const Icon(Icons.menu_book_outlined),
+                title: const Text("第三方许可证"),
+                subtitle: const Text("查看应用使用的开源组件许可"),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => showDialog<void>(
+                  context: context,
+                  builder: (context) => const ThirdPartyLicensesDialog(),
+                ),
               ),
             ],
           ),
