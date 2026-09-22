@@ -41,7 +41,7 @@
 1. 本软件为本地便签工具，所有笔记默认保存在手机本地，建议定期备份
 2. 每次发布新版本，**同步修改两处版本号**
    - `pubspec.yaml` 的 version
-   - `lib/main.dart` 内 `currentVer`
+   - `lib/main.dart` 内 `currentVersion`
 3. 升级必须使用**同一签名密钥**打包，否则无法覆盖安装
 4. 仅支持ARM64架构安卓设备
 

@@ -97,7 +97,7 @@ jobs:
               }
           }
           def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '1'
-          def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '1.0'
+          def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '1.0.2'
           android {
               namespace "com.zex.note"
               compileSdk 34
@@ -139,6 +139,65 @@ jobs:
           WRAPPER_EOF
           echo "✅ 已生成Flutter官方标准Gradle配置"
 
+      - name: 配置应用内APK安装通道
+        run: |
+          mkdir -p android/app/src/main/res/xml
+          cat > android/app/src/main/res/xml/file_paths.xml << 'FILE_PATHS_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <paths xmlns:android="http://schemas.android.com/apk/res/android">
+              <files-path name="app_files" path="." />
+              <cache-path name="app_cache" path="." />
+          </paths>
+          FILE_PATHS_EOF
+          cat > android/app/src/main/kotlin/com/zex/note/MainActivity.kt << 'MAIN_ACTIVITY_EOF'
+          package com.zex.note
+
+          import android.content.Intent
+          import android.net.Uri
+          import android.os.Build
+          import android.provider.Settings
+          import androidx.core.content.FileProvider
+          import io.flutter.embedding.android.FlutterActivity
+          import io.flutter.embedding.engine.FlutterEngine
+          import io.flutter.plugin.common.MethodChannel
+          import java.io.File
+
+          class MainActivity : FlutterActivity() {
+              private val channelName = "com.zex.note/installer"
+
+              override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+                  super.configureFlutterEngine(flutterEngine)
+                  MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
+                      .setMethodCallHandler { call, result ->
+                          when (call.method) {
+                              "canInstallPackages" -> result.success(Build.VERSION.SDK_INT < Build.VERSION_CODES.O || packageManager.canRequestPackageInstalls())
+                              "openInstallSettings" -> {
+                                  startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
+                                  result.success(null)
+                              }
+                              "installApk" -> {
+                                  val path = call.argument<String>("path")
+                                  if (path == null) {
+                                      result.error("MISSING_PATH", "APK path is missing", null)
+                                      return@setMethodCallHandler
+                                  }
+                                  val apkUri = FileProvider.getUriForFile(this, "$packageName.fileprovider", File(path))
+                                  startActivity(Intent(Intent.ACTION_VIEW).apply {
+                                      setDataAndType(apkUri, "application/vnd.android.package-archive")
+                                      addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                      addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                  })
+                                  result.success(null)
+                              }
+                              else -> result.notImplemented()
+                          }
+                      }
+              }
+          }
+          MAIN_ACTIVITY_EOF
+          sed -i '/<activity/i \
+              <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true">\n                  <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />\n              </provider>' android/app/src/main/AndroidManifest.xml
+
       - name: 自动添加权限到AndroidManifest.xml
         run: |
           sed -i '/<application/i \
@@ -170,7 +229,7 @@ jobs:
       - name: 读取版本号
         id: get_version
         run: |
-          VERSION=$(grep 'version:' pubspec.yaml | head -1 | awk '{print $2}')
+          VERSION=$(grep '^version:' pubspec.yaml | head -1 | awk '{print $2}' | cut -d+ -f1)
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
       - name: 编译Release APK（仅arm64）
