@@ -23,7 +23,7 @@ jobs:
     name: 上传并发布 AppShare 版本
     runs-on: ubuntu-latest
     env:
-      APPSHARE_BASE_URL: https://sharess.app
+      APPSHARE_BASE_URL: https://app.sharess.cn
       APPSHARE_APP_ID: AC662DEF68539F4C043EE4
       APPSHARE_APP_KEY: ${{ secrets.APPSHARE_APP_KEY }}
       APPSHARE_UPDATE_LOG: ${{ secrets.APPSHARE_UPDATE_LOG }}
