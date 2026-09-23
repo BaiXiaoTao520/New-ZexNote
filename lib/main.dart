@@ -13,7 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 const String repository = "BaiXiaoTao520/New-ZexNote";
 const String repositoryUrl = "https://github.com/$repository";
-const String currentVersion = "1.1.5";
+const String currentVersion = "1.1.6";
 const MethodChannel installerChannel = MethodChannel("com.zex.note/installer");
 
 final ValueNotifier<bool> globalDynamicColorNotifier = ValueNotifier(true);
@@ -1678,7 +1678,11 @@ class AboutPage extends StatelessWidget {
                     BoxShadow(color: Color(0x1A000000), blurRadius: 20, offset: Offset(0, 8)),
                   ],
                 ),
-                child: const Icon(Icons.note, size: 64),
+                child: Icon(
+                  Icons.note_alt_rounded,
+                  size: 64,
+                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                ),
               ),
               const SizedBox(height: 24),
               Text(
