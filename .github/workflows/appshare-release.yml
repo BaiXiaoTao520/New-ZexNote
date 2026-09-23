@@ -32,6 +32,9 @@ jobs:
       APPSHARE_SOURCE: ${{ vars.APPSHARE_SOURCE || 'GitHub Actions' }}
       APPSHARE_HIDE_UPLOADER: ${{ vars.APPSHARE_HIDE_UPLOADER || 'true' }}
       APPSHARE_TYPE: ${{ vars.APPSHARE_TYPE || '1' }}
+      APPSHARE_CONNECT_TIMEOUT: 120
+      APPSHARE_REQUEST_TIMEOUT: 1800
+      APPSHARE_UPLOAD_TIMEOUT: 7200
 
     steps:
       - name: 拉取项目源码
@@ -91,7 +94,10 @@ jobs:
 
       - name: 下载 GitHub Latest Release APK
         run: |
-          curl --fail --location --retry 3 \
+          curl --fail --location \
+            --connect-timeout "$APPSHARE_CONNECT_TIMEOUT" \
+            --max-time "$APPSHARE_REQUEST_TIMEOUT" \
+            --retry 5 --retry-delay 15 --retry-all-errors \
             -o app-release.apk \
             "https://github.com/${{ github.repository }}/releases/latest/download/app-release.apk"
           test -s app-release.apk
@@ -117,6 +123,9 @@ jobs:
         run: |
           UPLOAD_SIGN=$(printf '%s' "${APPSHARE_APP_ID}app-release.apk${FILE_SIGN}${APPSHARE_APP_KEY}" | md5sum | awk '{print $1}')
           curl --fail-with-body --silent --show-error --get \
+            --connect-timeout "$APPSHARE_CONNECT_TIMEOUT" \
+            --max-time "$APPSHARE_REQUEST_TIMEOUT" \
+            --retry 5 --retry-delay 15 --retry-all-errors \
             "$APPSHARE_BASE_URL/oauth/v1/generateUploadUrl" \
             --data-urlencode "appId=$APPSHARE_APP_ID" \
             --data-urlencode "name=app-release.apk" \
@@ -152,7 +161,11 @@ jobs:
             echo "未返回 presignUrl，且 reuse 不为 true"
             exit 1
           }
-          curl --fail-with-body --silent --show-error --request PUT "$PRESIGN_URL" \
+          curl --fail-with-body --silent --show-error --request PUT \
+            --connect-timeout "$APPSHARE_CONNECT_TIMEOUT" \
+            --max-time "$APPSHARE_UPLOAD_TIMEOUT" \
+            --retry 3 --retry-delay 20 --retry-all-errors \
+            "$PRESIGN_URL" \
             --header 'Content-Type: application/octet-stream' \
             --data-binary @app-release.apk
 
@@ -170,6 +183,9 @@ jobs:
             PUBLISH_PASSWORD_ARGS+=(--data-urlencode "password=$APPSHARE_PASSWORD")
           fi
           curl --fail-with-body --silent --show-error --get \
+            --connect-timeout "$APPSHARE_CONNECT_TIMEOUT" \
+            --max-time "$APPSHARE_REQUEST_TIMEOUT" \
+            --retry 5 --retry-delay 15 --retry-all-errors \
             "$APPSHARE_BASE_URL/oauth/v1/publishVersion" \
             --data-urlencode "appId=$APPSHARE_APP_ID" \
             --data-urlencode "recordId=$RECORD_ID" \
@@ -191,6 +207,9 @@ jobs:
           # sign=md5(appId+versionCode+type+appKey)
           CHECK_SIGN=$(printf '%s' "${APPSHARE_APP_ID}${VERSION_CODE}${APPSHARE_TYPE}${APPSHARE_APP_KEY}" | md5sum | awk '{print $1}')
           curl --fail-with-body --silent --show-error --get \
+            --connect-timeout "$APPSHARE_CONNECT_TIMEOUT" \
+            --max-time "$APPSHARE_REQUEST_TIMEOUT" \
+            --retry 5 --retry-delay 15 --retry-all-errors \
             "$APPSHARE_BASE_URL/oauth/v1/checkUpdate" \
             --data-urlencode "appId=$APPSHARE_APP_ID" \
             --data-urlencode "versionCode=$VERSION_CODE" \
