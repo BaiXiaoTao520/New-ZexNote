@@ -96,8 +96,8 @@ jobs:
                   localProperties.load(reader)
               }
           }
-          def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '3'
-          def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '1.1.0'
+          def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '4'
+          def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '1.1.5'
           android {
               namespace "com.zex.note"
               compileSdk 34
@@ -156,7 +156,6 @@ jobs:
           import android.net.Uri
           import android.os.Build
           import android.provider.Settings
-          import android.widget.Toast
           import androidx.core.content.FileProvider
           import io.flutter.embedding.android.FlutterActivity
           import io.flutter.embedding.engine.FlutterEngine
@@ -177,10 +176,6 @@ jobs:
                               "canInstallPackages" -> result.success(Build.VERSION.SDK_INT < Build.VERSION_CODES.O || packageManager.canRequestPackageInstalls())
                               "openInstallSettings" -> {
                                   startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
-                                  result.success(null)
-                              }
-                              "showToast" -> {
-                                  Toast.makeText(this, call.argument<String>("message") ?: "", Toast.LENGTH_SHORT).show()
                                   result.success(null)
                               }
                               "saveTextFile" -> {

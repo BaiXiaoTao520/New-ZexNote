@@ -1,0 +1,170 @@
+name: AppShare OAuth 发版
+
+# 本工作流仅手动触发，不会在 GitHub Release 构建完成后自动运行。
+# 需要你在仓库 Settings -> Secrets and variables -> Actions 中配置：
+# APPSHARE_APP_KEY: 填写 AppShare appKey，例如：你的 AppShare appKey
+# APPSHARE_UPDATE_LOG: 填写本次更新说明，例如：新增功能并修复已知问题
+# APPSHARE_LINK: 填写第三方网盘或外部下载链接，例如：https://example.com/app-release.apk
+# APPSHARE_APP_ID 已在下方写入，无需重复配置。
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: 上传并发布 AppShare 版本
+    runs-on: ubuntu-latest
+    env:
+      APPSHARE_BASE_URL: https://app.sharess.cn
+      APPSHARE_APP_ID: AC662DEF68539F4C043EE4
+      APPSHARE_APP_KEY: ${{ secrets.APPSHARE_APP_KEY }}
+      APPSHARE_UPDATE_LOG: ${{ secrets.APPSHARE_UPDATE_LOG }}
+      APPSHARE_LINK: ${{ secrets.APPSHARE_LINK }}
+
+    steps:
+      - name: 拉取项目源码
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: 安装 AppShare 工作流依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes jq curl coreutils
+          jq --version
+          curl --version
+          md5sum --version | head -n 1
+          stat --version | head -n 1
+
+      - name: 检查 AppShare 配置
+        run: |
+          test -n "$APPSHARE_APP_KEY" || {
+            echo "缺少 GitHub Secret: APPSHARE_APP_KEY"
+            exit 1
+          }
+          test -n "$APPSHARE_UPDATE_LOG" || {
+            echo "缺少 GitHub Secret: APPSHARE_UPDATE_LOG"
+            exit 1
+          }
+          test -n "$APPSHARE_LINK" || {
+            echo "缺少 GitHub Secret: APPSHARE_LINK"
+            exit 1
+          }
+
+      - name: 读取版本号
+        id: version
+        shell: bash
+        run: |
+          VERSION_FIELD=$(awk '$1 == "version:" {print $2; exit}' pubspec.yaml)
+          VERSION_NAME=${VERSION_FIELD%%+*}
+          VERSION_CODE=${VERSION_FIELD#*+}
+          if [ "$VERSION_CODE" = "$VERSION_FIELD" ]; then
+            VERSION_CODE=1
+          fi
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "检测到版本 $VERSION_NAME+$VERSION_CODE"
+
+      - name: 下载 GitHub Latest Release APK
+        run: |
+          curl --fail --location --retry 3 \
+            -o app-release.apk \
+            "https://github.com/${{ github.repository }}/releases/latest/download/app-release.apk"
+          test -s app-release.apk
+
+      - name: 计算 APK 文件信息
+        id: file
+        shell: bash
+        run: |
+          FILE_NAME=app-release.apk
+          FILE_SIGN=$(md5sum "$FILE_NAME" | awk '{print $1}')
+          BYTE_SIZE=$(stat -c '%s' "$FILE_NAME")
+          echo "file_sign=$FILE_SIGN" >> "$GITHUB_OUTPUT"
+          echo "byte_size=$BYTE_SIZE" >> "$GITHUB_OUTPUT"
+          echo "APK 大小: $BYTE_SIZE bytes"
+          echo "APK MD5: $FILE_SIGN"
+
+      - name: 申请 AppShare 上传地址
+        id: upload_url
+        env:
+          FILE_SIGN: ${{ steps.file.outputs.file_sign }}
+          BYTE_SIZE: ${{ steps.file.outputs.byte_size }}
+        shell: bash
+        run: |
+          UPLOAD_SIGN=$(printf '%s' "${APPSHARE_APP_ID}app-release.apk${FILE_SIGN}${APPSHARE_APP_KEY}" | md5sum | awk '{print $1}')
+          curl --fail-with-body --silent --show-error --get \
+            "$APPSHARE_BASE_URL/oauth/v1/generateUploadUrl" \
+            --data-urlencode "appId=$APPSHARE_APP_ID" \
+            --data-urlencode "name=app-release.apk" \
+            --data-urlencode "fileSign=$FILE_SIGN" \
+            --data-urlencode "byteSize=$BYTE_SIZE" \
+            --data-urlencode "sign=$UPLOAD_SIGN" \
+            -o upload-response.json
+
+          cat upload-response.json | jq 'del(.appKey, .sign, .data.appKey, .data.sign)'
+          REUSE=$(jq -r '(.data.reuse // .reuse // false) | tostring' upload-response.json)
+          PRESIGN_URL=$(jq -r '(.data.presignUrl // .presignUrl // "")' upload-response.json)
+          RECORD_ID=$(jq -r '(.data.recordId // .recordId // "")' upload-response.json)
+
+          test -n "$RECORD_ID" && test "$RECORD_ID" != "null" || {
+            echo "generateUploadUrl 未返回 recordId"
+            exit 1
+          }
+
+          echo "record_id=$RECORD_ID" >> "$GITHUB_OUTPUT"
+          echo "reuse=$REUSE" >> "$GITHUB_OUTPUT"
+          {
+            echo 'presign_url<<EOF'
+            echo "$PRESIGN_URL"
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+
+      - name: 上传 APK 到 AppShare
+        if: steps.upload_url.outputs.reuse != 'true'
+        env:
+          PRESIGN_URL: ${{ steps.upload_url.outputs.presign_url }}
+        run: |
+          test -n "$PRESIGN_URL" || {
+            echo "未返回 presignUrl，且 reuse 不为 true"
+            exit 1
+          }
+          curl --fail-with-body --silent --show-error --request PUT "$PRESIGN_URL" \
+            --header 'Content-Type: application/octet-stream' \
+            --data-binary @app-release.apk
+
+      - name: 发布 AppShare 版本
+        env:
+          RECORD_ID: ${{ steps.upload_url.outputs.record_id }}
+          VERSION_CODE: ${{ steps.version.outputs.version_code }}
+          VERSION_NAME: ${{ steps.version.outputs.version_name }}
+        shell: bash
+        run: |
+          # sign=md5(appId+recordId+versionCode+versionName+type+appKey)
+          PUBLISH_SIGN=$(printf '%s' "${APPSHARE_APP_ID}${RECORD_ID}${VERSION_CODE}${VERSION_NAME}1${APPSHARE_APP_KEY}" | md5sum | awk '{print $1}')
+          curl --fail-with-body --silent --show-error --get \
+            "$APPSHARE_BASE_URL/oauth/v1/publishVersion" \
+            --data-urlencode "appId=$APPSHARE_APP_ID" \
+            --data-urlencode "recordId=$RECORD_ID" \
+            --data-urlencode "versionCode=$VERSION_CODE" \
+            --data-urlencode "versionName=$VERSION_NAME" \
+            --data-urlencode "type=1" \
+            --data-urlencode "updateLog=$APPSHARE_UPDATE_LOG" \
+            --data-urlencode "link=$APPSHARE_LINK" \
+            --data-urlencode "sign=$PUBLISH_SIGN"
+
+      - name: 检查 AppShare 更新接口
+        env:
+          VERSION_CODE: ${{ steps.version.outputs.version_code }}
+        shell: bash
+        run: |
+          # sign=md5(appId+versionCode+type+appKey)
+          CHECK_SIGN=$(printf '%s' "${APPSHARE_APP_ID}${VERSION_CODE}1${APPSHARE_APP_KEY}" | md5sum | awk '{print $1}')
+          curl --fail-with-body --silent --show-error --get \
+            "$APPSHARE_BASE_URL/oauth/v1/checkUpdate" \
+            --data-urlencode "appId=$APPSHARE_APP_ID" \
+            --data-urlencode "versionCode=$VERSION_CODE" \
+            --data-urlencode "type=1" \
+            --data-urlencode "sign=$CHECK_SIGN"

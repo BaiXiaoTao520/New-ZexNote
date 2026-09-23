@@ -13,7 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 const String repository = "BaiXiaoTao520/New-ZexNote";
 const String repositoryUrl = "https://github.com/$repository";
-const String currentVersion = "1.1.0";
+const String currentVersion = "1.1.5";
 const MethodChannel installerChannel = MethodChannel("com.zex.note/installer");
 
 final ValueNotifier<bool> globalDynamicColorNotifier = ValueNotifier(true);
@@ -557,7 +557,6 @@ class _MainPageState extends State<MainPage> {
                 onOpenNote: openEditPage,
                 onToggleSelection: toggleNoteSelection,
                 onToggleSelectAll: toggleSelectAll,
-                onDeleteNote: (note) => deleteNotes([note]),
               ),
               ArchivePage(
                 notes: notes,
@@ -566,7 +565,6 @@ class _MainPageState extends State<MainPage> {
                 onOpenNote: openEditPage,
                 onToggleSelection: toggleArchivedNoteSelection,
                 onToggleSelectAll: toggleArchivedSelectAll,
-                onDeleteNote: (note) => deleteNotes([note]),
               ),
               SettingPage(onCheckUpdate: () => checkVersion(showNoUpdateToast: true)),
             ],
@@ -1021,7 +1019,6 @@ class NoteHomePage extends StatelessWidget {
   final ValueChanged<Note> onOpenNote;
   final ValueChanged<Note> onToggleSelection;
   final VoidCallback onToggleSelectAll;
-  final ValueChanged<Note> onDeleteNote;
 
   const NoteHomePage({
     super.key,
@@ -1031,7 +1028,6 @@ class NoteHomePage extends StatelessWidget {
     required this.onOpenNote,
     required this.onToggleSelection,
     required this.onToggleSelectAll,
-    required this.onDeleteNote,
   });
 
   @override
@@ -1052,7 +1048,16 @@ class NoteHomePage extends StatelessWidget {
             : null,
       ),
       body: activeNotes.isEmpty
-          ? const Center(child: Text("暂无便签，点击右下角加号新建"))
+          ? const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.note_add_outlined, size: 48),
+                  SizedBox(height: 12),
+                  Text("暂无便签，点击右下角加号新建"),
+                ],
+              ),
+            )
           : ListView.builder(
               padding: const EdgeInsets.only(bottom: 160),
               itemCount: activeNotes.length,
@@ -1085,12 +1090,6 @@ class NoteHomePage extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(color: foregroundColor.withAlpha(210)),
                     ),
-                    trailing: IconButton(
-                      tooltip: "删除便签",
-                      color: foregroundColor,
-                      onPressed: () => onDeleteNote(note),
-                      icon: const Icon(Icons.delete_outline),
-                    ),
                   ),
                 );
               },
@@ -1106,7 +1105,6 @@ class ArchivePage extends StatelessWidget {
   final ValueChanged<Note> onOpenNote;
   final ValueChanged<Note> onToggleSelection;
   final VoidCallback onToggleSelectAll;
-  final ValueChanged<Note> onDeleteNote;
 
   const ArchivePage({
     super.key,
@@ -1116,7 +1114,6 @@ class ArchivePage extends StatelessWidget {
     required this.onOpenNote,
     required this.onToggleSelection,
     required this.onToggleSelectAll,
-    required this.onDeleteNote,
   });
 
   @override
@@ -1137,7 +1134,16 @@ class ArchivePage extends StatelessWidget {
             : null,
       ),
       body: archivedNotes.isEmpty
-          ? const Center(child: Text("暂无归档便签"))
+          ? const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.archive_outlined, size: 48),
+                  SizedBox(height: 12),
+                  Text("暂无归档便签"),
+                ],
+              ),
+            )
           : ListView.builder(
               padding: const EdgeInsets.only(bottom: 160),
               itemCount: archivedNotes.length,
@@ -1169,12 +1175,6 @@ class ArchivePage extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(color: foregroundColor.withAlpha(210)),
-                    ),
-                    trailing: IconButton(
-                      tooltip: "删除便签",
-                      color: foregroundColor,
-                      onPressed: () => onDeleteNote(note),
-                      icon: const Icon(Icons.delete_outline),
                     ),
                   ),
                 );
@@ -1235,7 +1235,7 @@ class _NoteEditPageState extends State<NoteEditPage> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text("未保存的更改"),
-        content: const Text("你有未保存的内容，确定要离开吗？"),
+        content: const Text("你有未保存的内容。选择“退出且不保存”将直接丢弃这些修改。"),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
@@ -1243,7 +1243,7 @@ class _NoteEditPageState extends State<NoteEditPage> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text("离开"),
+            child: const Text("退出且不保存"),
           ),
         ],
       ),
@@ -1281,6 +1281,7 @@ class _NoteEditPageState extends State<NoteEditPage> {
       isArchived = !isArchived;
       hasUnsavedChanges = true;
     });
+    showAppToast(context, isArchived ? "已归档" : "已取消归档");
   }
 
   Future<void> _deleteNote() async {
