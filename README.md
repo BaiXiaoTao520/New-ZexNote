@@ -1,5 +1,5 @@
 # ZexNote
-一款简洁精致的本地便签APP，基于 Flutter + Material3 开发。
+一款简洁精致的本地便签APP，基于 Flutter + Material3 开发
 
 ## ✨ 软件特点
 - 主题：跟随系统浅色/深色夜间模式自动切换；Android12+ 支持 Material You 壁纸动态取色
@@ -23,7 +23,7 @@
 6. 安全校验：下载完成校验APK签名，签名不一致拦截安装，防止恶意篡改包
 
 ## 📦 构建说明
-- 使用 GitHub Actions 云端远程编译打包 Release APK
+- 使用 GitHub Actions 云端远程编译打包APK
 - 云端自动使用JKS密钥签名，输出已签名APK
 - 构建成功自动发布 GitHub Release，自动标记为 Latest 最新版本
 - 用户下载直接安装，无需手动签名，新版本可覆盖升级
@@ -46,4 +46,4 @@
 4. 仅支持ARM64架构安卓设备
 
 ## 📄 开源协议
-本项目采用自定义开源许可协议，详见 `LICENSE` 文件。
+本项目采用自定义开源许可协议，详见 `LICENSE` 文件
