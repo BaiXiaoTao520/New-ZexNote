@@ -5,6 +5,12 @@ name: AppShare OAuth 发版
 # APPSHARE_APP_KEY: 填写 AppShare appKey，例如：你的 AppShare appKey
 # APPSHARE_UPDATE_LOG: 填写本次更新说明，例如：新增功能并修复已知问题
 # APPSHARE_LINK: 填写第三方网盘或外部下载链接，例如：https://example.com/app-release.apk
+# APPSHARE_PASSWORD: 可选，三方网盘密码；没有密码可留空。
+# Repository Variables（Settings -> Secrets and variables -> Actions -> Variables）：
+# APPSHARE_WARNING: 可选，注意事项，例如：安装前请确认签名一致
+# APPSHARE_SOURCE: 可选，来源，例如：GitHub Releases
+# APPSHARE_HIDE_UPLOADER: 可选，是否隐藏上传者，填写 true 或 false，默认 false
+# APPSHARE_TYPE: 可选，发版类型，填写 1 或 2，默认 1。
 # APPSHARE_APP_ID 已在下方写入，无需重复配置。
 
 on:
@@ -23,6 +29,11 @@ jobs:
       APPSHARE_APP_KEY: ${{ secrets.APPSHARE_APP_KEY }}
       APPSHARE_UPDATE_LOG: ${{ secrets.APPSHARE_UPDATE_LOG }}
       APPSHARE_LINK: ${{ secrets.APPSHARE_LINK }}
+      APPSHARE_PASSWORD: ${{ secrets.APPSHARE_PASSWORD }}
+      APPSHARE_WARNING: ${{ vars.APPSHARE_WARNING || '请确认下载来源和安装包签名。' }}
+      APPSHARE_SOURCE: ${{ vars.APPSHARE_SOURCE || 'GitHub Releases' }}
+      APPSHARE_HIDE_UPLOADER: ${{ vars.APPSHARE_HIDE_UPLOADER || 'false' }}
+      APPSHARE_TYPE: ${{ vars.APPSHARE_TYPE || '1' }}
 
     steps:
       - name: 拉取项目源码
@@ -53,6 +64,14 @@ jobs:
             echo "缺少 GitHub Secret: APPSHARE_LINK"
             exit 1
           }
+          case "$APPSHARE_TYPE" in
+            1|2) ;;
+            *) echo "APPSHARE_TYPE 必须是 1 或 2"; exit 1 ;;
+          esac
+          case "$APPSHARE_HIDE_UPLOADER" in
+            true|false) ;;
+            *) echo "APPSHARE_HIDE_UPLOADER 必须是 true 或 false"; exit 1 ;;
+          esac
 
       - name: 读取版本号
         id: version
@@ -143,16 +162,24 @@ jobs:
         shell: bash
         run: |
           # sign=md5(appId+recordId+versionCode+versionName+type+appKey)
-          PUBLISH_SIGN=$(printf '%s' "${APPSHARE_APP_ID}${RECORD_ID}${VERSION_CODE}${VERSION_NAME}1${APPSHARE_APP_KEY}" | md5sum | awk '{print $1}')
+          PUBLISH_SIGN=$(printf '%s' "${APPSHARE_APP_ID}${RECORD_ID}${VERSION_CODE}${VERSION_NAME}${APPSHARE_TYPE}${APPSHARE_APP_KEY}" | md5sum | awk '{print $1}')
+          PUBLISH_PASSWORD_ARGS=()
+          if [ -n "$APPSHARE_PASSWORD" ]; then
+            PUBLISH_PASSWORD_ARGS+=(--data-urlencode "password=$APPSHARE_PASSWORD")
+          fi
           curl --fail-with-body --silent --show-error --get \
             "$APPSHARE_BASE_URL/oauth/v1/publishVersion" \
             --data-urlencode "appId=$APPSHARE_APP_ID" \
             --data-urlencode "recordId=$RECORD_ID" \
             --data-urlencode "versionCode=$VERSION_CODE" \
             --data-urlencode "versionName=$VERSION_NAME" \
-            --data-urlencode "type=1" \
+            --data-urlencode "type=$APPSHARE_TYPE" \
             --data-urlencode "updateLog=$APPSHARE_UPDATE_LOG" \
             --data-urlencode "link=$APPSHARE_LINK" \
+            --data-urlencode "warning=$APPSHARE_WARNING" \
+            --data-urlencode "source=$APPSHARE_SOURCE" \
+            --data-urlencode "hideUploader=$APPSHARE_HIDE_UPLOADER" \
+            "${PUBLISH_PASSWORD_ARGS[@]}" \
             --data-urlencode "sign=$PUBLISH_SIGN"
 
       - name: 检查 AppShare 更新接口
@@ -161,10 +188,10 @@ jobs:
         shell: bash
         run: |
           # sign=md5(appId+versionCode+type+appKey)
-          CHECK_SIGN=$(printf '%s' "${APPSHARE_APP_ID}${VERSION_CODE}1${APPSHARE_APP_KEY}" | md5sum | awk '{print $1}')
+          CHECK_SIGN=$(printf '%s' "${APPSHARE_APP_ID}${VERSION_CODE}${APPSHARE_TYPE}${APPSHARE_APP_KEY}" | md5sum | awk '{print $1}')
           curl --fail-with-body --silent --show-error --get \
             "$APPSHARE_BASE_URL/oauth/v1/checkUpdate" \
             --data-urlencode "appId=$APPSHARE_APP_ID" \
             --data-urlencode "versionCode=$VERSION_CODE" \
-            --data-urlencode "type=1" \
+            --data-urlencode "type=$APPSHARE_TYPE" \
             --data-urlencode "sign=$CHECK_SIGN"
