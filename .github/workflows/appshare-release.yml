@@ -7,7 +7,6 @@ name: AppShare OAuth 发版
 # APPSHARE_LINK: 填写第三方网盘或外部下载链接，例如：https://example.com/app-release.apk
 # APPSHARE_PASSWORD: 可选，三方网盘密码；没有密码可留空。
 # Repository Variables（Settings -> Secrets and variables -> Actions -> Variables）：
-# APPSHARE_WARNING: 可选，注意事项，例如：安装前请确认签名一致
 # APPSHARE_SOURCE: 可选，来源，例如：GitHub Releases
 # APPSHARE_HIDE_UPLOADER: 可选，是否隐藏上传者，填写 true 或 false，默认 false
 # APPSHARE_TYPE: 可选，发版类型，填写 1 或 2，默认 1。
@@ -24,15 +23,14 @@ jobs:
     name: 上传并发布 AppShare 版本
     runs-on: ubuntu-latest
     env:
-      APPSHARE_BASE_URL: https://app.sharess.cn
+      APPSHARE_BASE_URL: https://sharess.app
       APPSHARE_APP_ID: AC662DEF68539F4C043EE4
       APPSHARE_APP_KEY: ${{ secrets.APPSHARE_APP_KEY }}
       APPSHARE_UPDATE_LOG: ${{ secrets.APPSHARE_UPDATE_LOG }}
       APPSHARE_LINK: ${{ secrets.APPSHARE_LINK }}
       APPSHARE_PASSWORD: ${{ secrets.APPSHARE_PASSWORD }}
-      APPSHARE_WARNING: ${{ vars.APPSHARE_WARNING || '请确认下载来源和安装包签名。' }}
-      APPSHARE_SOURCE: ${{ vars.APPSHARE_SOURCE || 'GitHub Releases' }}
-      APPSHARE_HIDE_UPLOADER: ${{ vars.APPSHARE_HIDE_UPLOADER || 'false' }}
+      APPSHARE_SOURCE: ${{ vars.APPSHARE_SOURCE || 'GitHub Actions' }}
+      APPSHARE_HIDE_UPLOADER: ${{ vars.APPSHARE_HIDE_UPLOADER || 'true' }}
       APPSHARE_TYPE: ${{ vars.APPSHARE_TYPE || '1' }}
 
     steps:
@@ -60,6 +58,10 @@ jobs:
             echo "缺少 GitHub Secret: APPSHARE_UPDATE_LOG"
             exit 1
           }
+          test -n "$APPSHARE_SOURCE" || {
+            echo "缺少 GitHub Secret: APPSHARE_SOURCE"
+            exit 1
+          }                    
           test -n "$APPSHARE_LINK" || {
             echo "缺少 GitHub Secret: APPSHARE_LINK"
             exit 1
@@ -176,7 +178,6 @@ jobs:
             --data-urlencode "type=$APPSHARE_TYPE" \
             --data-urlencode "updateLog=$APPSHARE_UPDATE_LOG" \
             --data-urlencode "link=$APPSHARE_LINK" \
-            --data-urlencode "warning=$APPSHARE_WARNING" \
             --data-urlencode "source=$APPSHARE_SOURCE" \
             --data-urlencode "hideUploader=$APPSHARE_HIDE_UPLOADER" \
             "${PUBLISH_PASSWORD_ARGS[@]}" \
