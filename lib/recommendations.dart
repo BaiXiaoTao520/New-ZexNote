@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:path_provider/path_provider.dart';
 
 import 'app_services.dart';
 
@@ -210,6 +209,7 @@ class _RecommendationDownloadDialogState extends State<RecommendationDownloadDia
     with WidgetsBindingObserver {
   http.Client? client;
   String? downloadedPath;
+  bool downloadCancelled = false;
   bool downloading = false;
   bool waitingForPermissionReturn = false;
   double progress = 0;
@@ -254,6 +254,7 @@ class _RecommendationDownloadDialogState extends State<RecommendationDownloadDia
 
   Future<void> _download() async {
     if (!mounted || downloading) return;
+    downloadCancelled = false;
     setState(() {
       downloading = true;
       status = "正在下载";
@@ -271,7 +272,7 @@ class _RecommendationDownloadDialogState extends State<RecommendationDownloadDia
       }
 
       totalBytes = response.contentLength ?? 0;
-      final directory = await getApplicationSupportDirectory();
+      final directory = await getConfiguredDownloadDirectory();
       final file = File(
         "${directory.path}/${widget.app.name.toLowerCase()}-${widget.app.version.replaceAll('.', '_')}.apk",
       );
@@ -297,6 +298,7 @@ class _RecommendationDownloadDialogState extends State<RecommendationDownloadDia
       showAppToast(context, "下载完成");
     } catch (_) {
       await sink?.close();
+      if (downloadCancelled) return;
       if (mounted) {
         setState(() {
           downloading = false;
@@ -311,6 +313,7 @@ class _RecommendationDownloadDialogState extends State<RecommendationDownloadDia
   }
 
   void _cancel() {
+    downloadCancelled = true;
     client?.close();
     if (mounted) Navigator.pop(context);
   }
