@@ -14,7 +14,7 @@ import 'recommendations.dart';
 
 const String repository = "BaiXiaoTao520/New-ZexNote";
 const String repositoryUrl = "https://github.com/$repository";
-const String currentVersion = "1.5.0";
+const String currentVersion = "1.5.1";
 
 final ValueNotifier<bool> globalDynamicColorNotifier = ValueNotifier(true);
 final ValueNotifier<bool> globalNavigationBlurNotifier = ValueNotifier(true);
