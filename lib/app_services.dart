@@ -3,17 +3,14 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const MethodChannel installerChannel = MethodChannel("com.zex.note/installer");
 
+const String publicDownloadPath = "/storage/emulated/0/Download";
+
 Future<Directory> getConfiguredDownloadDirectory() async {
-  final externalDirectories = await getExternalStorageDirectories(
-    type: StorageDirectory.downloads,
-  );
-  final baseDirectory = externalDirectories?.first ??
-      Directory("${(await getApplicationSupportDirectory()).path}/Download");
+  final baseDirectory = Directory(publicDownloadPath);
   final prefs = await SharedPreferences.getInstance();
   final configuredName = prefs.getString("downloadDirectoryName")?.trim() ?? "";
   final safeName = configuredName
@@ -24,6 +21,46 @@ Future<Directory> getConfiguredDownloadDirectory() async {
       : Directory("${baseDirectory.path}/$safeName");
   await directory.create(recursive: true);
   return directory;
+}
+
+Future<bool> hasStoragePermission() async {
+  try {
+    return await installerChannel.invokeMethod<bool>("hasStoragePermission") ?? false;
+  } catch (_) {
+    return false;
+  }
+}
+
+Future<void> openStoragePermissionSettings() async {
+  try {
+    await installerChannel.invokeMethod<void>("openStoragePermissionSettings");
+  } catch (_) {}
+}
+
+Future<bool> ensureStoragePermission(BuildContext context) async {
+  if (await hasStoragePermission()) return true;
+  if (!context.mounted) return false;
+  final shouldOpenSettings = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text("需要存储权限"),
+          content: const Text("为了将下载文件保存到 /storage/emulated/0/Download，请允许 ZexNote 访问外部存储。"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text("稍后"),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text("去开启"),
+            ),
+          ],
+        ),
+      ) ??
+      false;
+  if (!shouldOpenSettings) return false;
+  await openStoragePermissionSettings();
+  return false;
 }
 
 void showAppToast(BuildContext context, String message, {bool isError = false}) {

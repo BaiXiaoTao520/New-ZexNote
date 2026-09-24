@@ -233,6 +233,12 @@ class _MainPageState extends State<MainPage> {
     loadNotesFromStorage();
     loadNavigationBlurPreference();
     autoCheckUpdate();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkStoragePermissionOnStartup());
+  }
+
+  Future<void> _checkStoragePermissionOnStartup() async {
+    if (!mounted) return;
+    await ensureStoragePermission(context);
   }
 
   Future<void> loadNotesFromStorage() async {
@@ -772,6 +778,8 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
 
   Future<void> _downloadAndInstall() async {
     if (!mounted || downloading || widget.update.downloadUrl.isEmpty) return;
+    if (!await ensureStoragePermission(context)) return;
+    if (!mounted) return;
     downloadCancelled = false;
     setState(() {
       downloading = true;
