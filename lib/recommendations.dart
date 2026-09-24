@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 
 import 'app_services.dart';
 
@@ -13,6 +14,7 @@ class RecommendedApp {
   final String description;
   final String downloadUrl;
   final IconData icon;
+  final bool browserOnly;
 
   const RecommendedApp({
     required this.name,
@@ -21,16 +23,17 @@ class RecommendedApp {
     required this.description,
     required this.downloadUrl,
     required this.icon,
+    this.browserOnly = false,
   });
 }
 
 const appShareRecommendation = RecommendedApp(
   name: "AppShare",
-  version: "v5.1.5",
+  version: "",
   summary: "App 多版本讨论、评分与资源分享平台",
-  downloadUrl:
-      "https://h1060.lanosso.com/4bd987711c2fe2a6b4d783b1fd4a77ab/6ab4e083/2026/09/13/1f9a115e338a149fc55ead460e2bee8d.apk?fn=AppShare-5.1.5(420).apk",
+  downloadUrl: "https://app.sharess.cn/download",
   icon: Icons.apps_rounded,
+  browserOnly: true,
   description: r"""AppShare 平台介绍
 一个提供 App 多版本讨论及评分的平台
 
@@ -143,7 +146,9 @@ class RecommendationCard extends StatelessWidget {
           child: Icon(app.icon),
         ),
         title: Text(app.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text("${app.version} · ${app.summary}"),
+        subtitle: Text(
+          app.version.isEmpty ? app.summary : "${app.version} · ${app.summary}",
+        ),
         trailing: const Icon(Icons.chevron_right),
         onTap: () => showDialog<void>(
           context: context,
@@ -166,7 +171,9 @@ class RecommendationInfoDialog extends StatelessWidget {
         children: [
           Icon(app.icon),
           const SizedBox(width: 10),
-          Expanded(child: Text("${app.name} ${app.version}")),
+          Expanded(
+            child: Text(app.version.isEmpty ? app.name : "${app.name} ${app.version}"),
+          ),
         ],
       ),
       content: SizedBox(
@@ -184,13 +191,59 @@ class RecommendationInfoDialog extends StatelessWidget {
         FilledButton.icon(
           onPressed: () {
             Navigator.pop(context);
-            showDialog<void>(
-              context: context,
-              builder: (dialogContext) => RecommendationDownloadDialog(app: app),
+            if (app.browserOnly) {
+              showDialog<void>(
+                context: context,
+                builder: (dialogContext) => const BrowserDownloadInfoDialog(),
+              );
+            } else {
+              showDialog<void>(
+                context: context,
+                builder: (dialogContext) => RecommendationDownloadDialog(app: app),
+              );
+            }
+          },
+          icon: Icon(app.browserOnly ? Icons.open_in_browser : Icons.download),
+          label: Text(app.browserOnly ? "浏览器下载" : "下载"),
+        ),
+      ],
+    );
+  }
+}
+
+class BrowserDownloadInfoDialog extends StatelessWidget {
+  const BrowserDownloadInfoDialog({super.key});
+
+  static const downloadUrl = "https://app.sharess.cn/download";
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text("AppShare 下载说明"),
+      content: const SingleChildScrollView(
+        child: Text(
+          "具体下载步骤：\n\n"
+          "1. 点击页面中的“正式版”。\n"
+          "2. 页面会跳转到蓝奏云。\n"
+          "3. 在蓝奏云页面点击下载即可。\n\n"
+          "建议使用电脑 UA 访问。手机端网页可能会提示开通会员才能下载。",
+          style: TextStyle(height: 1.5),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("取消"),
+        ),
+        FilledButton.icon(
+          onPressed: () async {
+            await launchUrl(
+              Uri.parse(downloadUrl),
+              mode: LaunchMode.externalApplication,
             );
           },
-          icon: const Icon(Icons.download),
-          label: const Text("下载"),
+          icon: const Icon(Icons.open_in_browser),
+          label: const Text("打开浏览器"),
         ),
       ],
     );
