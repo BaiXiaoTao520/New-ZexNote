@@ -254,6 +254,8 @@ class _RecommendationDownloadDialogState extends State<RecommendationDownloadDia
 
   Future<void> _download() async {
     if (!mounted || downloading) return;
+    if (!await ensureStoragePermission(context)) return;
+    if (!mounted) return;
     downloadCancelled = false;
     setState(() {
       downloading = true;

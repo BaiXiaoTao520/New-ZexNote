@@ -1,8 +1,11 @@
 package com.zex.note
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
@@ -30,6 +33,31 @@ class MainActivity : FlutterActivity() {
                             Uri.parse("package:$packageName")
                         )
                         startActivity(intent)
+                        result.success(null)
+                    }
+                    "hasStoragePermission" -> {
+                        val granted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            Environment.isExternalStorageManager()
+                        } else {
+                            checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
+                                PackageManager.PERMISSION_GRANTED
+                        }
+                        result.success(granted)
+                    }
+                    "openStoragePermissionSettings" -> {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            startActivity(
+                                Intent(
+                                    Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                                    Uri.parse("package:$packageName")
+                                )
+                            )
+                        } else {
+                            requestPermissions(
+                                arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE),
+                                2002
+                            )
+                        }
                         result.success(null)
                     }
                     "saveTextFile" -> {
