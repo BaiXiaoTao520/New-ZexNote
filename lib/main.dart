@@ -6,7 +6,6 @@ import 'dart:ui';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -638,6 +637,7 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
   bool waitingForPermissionReturn = false;
   String? downloadedPath;
   http.Client? downloadClient;
+  bool downloadCancelled = false;
   String status = "准备下载";
 
   @override
@@ -765,12 +765,14 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
   }
 
   Future<void> _cancelDownload() async {
+    downloadCancelled = true;
     downloadClient?.close();
     if (mounted) Navigator.pop(context);
   }
 
   Future<void> _downloadAndInstall() async {
     if (!mounted || downloading || widget.update.downloadUrl.isEmpty) return;
+    downloadCancelled = false;
     setState(() {
       downloading = true;
       downloadedPath = null;
@@ -790,7 +792,7 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
       }
 
       totalBytes = response.contentLength ?? 0;
-      final directory = await getApplicationSupportDirectory();
+      final directory = await getConfiguredDownloadDirectory();
       final file = File("${directory.path}/zexnote-${widget.update.displayVersion}.apk");
       sink = file.openWrite();
       await for (final chunk in response.stream) {
@@ -814,6 +816,7 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
       showAppToast(context, "下载完成");
     } catch (_) {
       await sink?.close();
+      if (downloadCancelled) return;
       if (mounted) {
         setState(() {
           downloading = false;
@@ -1428,6 +1431,16 @@ class SettingPage extends StatelessWidget {
             ),
           ),
           ListTile(
+            leading: const Icon(Icons.folder_outlined),
+            title: const Text("下载文件目录"),
+            subtitle: const Text("默认使用 Download 文件夹，可设置子目录"),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => showDialog<void>(
+              context: context,
+              builder: (context) => const DownloadDirectoryDialog(),
+            ),
+          ),
+          ListTile(
             leading: const Icon(Icons.info_outline),
             title: const Text("关于 ZexNote"),
             trailing: const Icon(Icons.chevron_right),
@@ -1577,6 +1590,77 @@ SOFTWARE.
         ),
       ],
     );
+  }
+}
+
+class DownloadDirectoryDialog extends StatefulWidget {
+  const DownloadDirectoryDialog({super.key});
+
+  @override
+  State<DownloadDirectoryDialog> createState() => _DownloadDirectoryDialogState();
+}
+
+class _DownloadDirectoryDialogState extends State<DownloadDirectoryDialog> {
+  late final TextEditingController directoryController;
+  bool loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    directoryController = TextEditingController();
+    _loadDirectory();
+  }
+
+  Future<void> _loadDirectory() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    directoryController.text = prefs.getString("downloadDirectoryName") ?? "";
+    setState(() => loading = false);
+  }
+
+  Future<void> _saveDirectory() async {
+    final directoryName = directoryController.text.trim();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString("downloadDirectoryName", directoryName);
+    if (!mounted) return;
+    Navigator.pop(context);
+    showAppToast(context, "下载目录已保存，后续下载立即生效");
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text("下载文件目录"),
+      content: loading
+          ? const SizedBox(
+              height: 72,
+              child: Center(child: CircularProgressIndicator()),
+            )
+          : TextField(
+              controller: directoryController,
+              decoration: const InputDecoration(
+                labelText: "Download 子目录",
+                hintText: "留空使用 Download 根目录",
+                prefixIcon: Icon(Icons.folder_outlined),
+              ),
+            ),
+      actions: [
+        TextButton(
+          onPressed: loading ? null : () => Navigator.pop(context),
+          child: const Text("取消"),
+        ),
+        FilledButton(
+          onPressed: loading ? null : _saveDirectory,
+          child: const Text("保存"),
+        ),
+      ],
+    );
+  }
+
+  @override
+  void dispose() {
+    directoryController.dispose();
+    super.dispose();
   }
 }
 

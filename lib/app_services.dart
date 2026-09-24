@@ -1,9 +1,30 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 const MethodChannel installerChannel = MethodChannel("com.zex.note/installer");
+
+Future<Directory> getConfiguredDownloadDirectory() async {
+  final externalDirectories = await getExternalStorageDirectories(
+    type: StorageDirectory.downloads,
+  );
+  final baseDirectory = externalDirectories?.first ??
+      Directory("${(await getApplicationSupportDirectory()).path}/Download");
+  final prefs = await SharedPreferences.getInstance();
+  final configuredName = prefs.getString("downloadDirectoryName")?.trim() ?? "";
+  final safeName = configuredName
+      .replaceAll(RegExp(r'[\\/:*?"<>|]'), "_")
+      .trim();
+  final directory = safeName.isEmpty
+      ? baseDirectory
+      : Directory("${baseDirectory.path}/$safeName");
+  await directory.create(recursive: true);
+  return directory;
+}
 
 void showAppToast(BuildContext context, String message, {bool isError = false}) {
   final overlay = Overlay.of(context, rootOverlay: true);
