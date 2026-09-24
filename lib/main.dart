@@ -5,88 +5,20 @@ import 'dart:ui';
 
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'app_services.dart';
+import 'recommendations.dart';
+
 const String repository = "BaiXiaoTao520/New-ZexNote";
 const String repositoryUrl = "https://github.com/$repository";
-const String currentVersion = "1.1.6";
-const MethodChannel installerChannel = MethodChannel("com.zex.note/installer");
+const String currentVersion = "1.5.0";
 
 final ValueNotifier<bool> globalDynamicColorNotifier = ValueNotifier(true);
 final ValueNotifier<bool> globalNavigationBlurNotifier = ValueNotifier(true);
-
-void showAppToast(BuildContext context, String message, {bool isError = false}) {
-  final overlay = Overlay.of(context, rootOverlay: true);
-  late final OverlayEntry entry;
-  entry = OverlayEntry(
-    builder: (overlayContext) {
-      final colorScheme = Theme.of(overlayContext).colorScheme;
-      final backgroundColor = isError
-          ? colorScheme.errorContainer
-          : colorScheme.inverseSurface;
-      final foregroundColor = isError
-          ? colorScheme.onErrorContainer
-          : colorScheme.onInverseSurface;
-      final bottomOffset = MediaQuery.of(overlayContext).viewPadding.bottom + 104;
-      return Positioned(
-        left: 24,
-        right: 24,
-        bottom: bottomOffset,
-        child: IgnorePointer(
-          child: Center(
-            child: Material(
-              color: Colors.transparent,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 360),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-                  decoration: BoxDecoration(
-                    color: backgroundColor.withAlpha(242),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: foregroundColor.withAlpha(35)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withAlpha(35),
-                        blurRadius: 16,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        isError ? Icons.error_outline : Icons.check_circle_outline,
-                        color: foregroundColor,
-                        size: 19,
-                      ),
-                      const SizedBox(width: 9),
-                      Flexible(
-                        child: Text(
-                          message,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: foregroundColor, fontSize: 14),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    },
-  );
-  overlay.insert(entry);
-  Timer(const Duration(seconds: 2), () {
-    if (entry.mounted) entry.remove();
-  });
-}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -566,6 +498,7 @@ class _MainPageState extends State<MainPage> {
                 onToggleSelection: toggleArchivedNoteSelection,
                 onToggleSelectAll: toggleArchivedSelectAll,
               ),
+              const AppRecommendationsPage(),
               SettingPage(onCheckUpdate: () => checkVersion(showNoUpdateToast: true)),
             ],
           ),
@@ -592,7 +525,7 @@ class _MainPageState extends State<MainPage> {
                     ],
                   ),
                   child: Row(
-                    children: List.generate(3, (index) {
+                    children: List.generate(4, (index) {
                       final selected = currentIndex == index;
                       return Expanded(
                         child: Material(
@@ -630,7 +563,9 @@ class _MainPageState extends State<MainPage> {
                                           ? Icons.sticky_note_2_outlined
                                           : index == 1
                                               ? Icons.archive_outlined
-                                              : Icons.settings_outlined,
+                                              : index == 2
+                                                  ? Icons.apps_outlined
+                                                  : Icons.settings_outlined,
                                       color: selected
                                           ? selectedNavigationForeground
                                           : unselectedNavigationForeground,
