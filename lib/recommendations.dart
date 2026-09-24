@@ -401,11 +401,21 @@ class _RecommendationDownloadDialogState extends State<RecommendationDownloadDia
       actions: [
         if (downloading)
           TextButton(onPressed: _cancel, child: const Text("取消")),
-        if (!downloading && !completed)
+        if (!downloading && !completed && !failed)
           TextButton(
-            onPressed: failed ? _download : () => Navigator.pop(context),
-            child: Text(failed ? "重试" : "取消"),
+            onPressed: () => Navigator.pop(context),
+            child: const Text("取消"),
           ),
+        if (failed) ...[
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("取消"),
+          ),
+          FilledButton(
+            onPressed: _download,
+            child: const Text("重试"),
+          ),
+        ],
         if (completed) ...[
           TextButton(
             onPressed: () => Navigator.pop(context),
