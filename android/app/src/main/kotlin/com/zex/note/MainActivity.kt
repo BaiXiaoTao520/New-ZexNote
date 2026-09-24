@@ -1,6 +1,7 @@
 package com.zex.note
 
 import android.Manifest
+import android.content.ClipData
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -86,6 +87,7 @@ class MainActivity : FlutterActivity() {
                             setDataAndType(apkUri, "application/vnd.android.package-archive")
                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            clipData = ClipData.newRawUri("APK", apkUri)
                         }
                         startActivity(intent)
                         result.success(null)
