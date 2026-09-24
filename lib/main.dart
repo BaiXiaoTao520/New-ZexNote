@@ -936,11 +936,21 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
             onPressed: _cancelDownload,
             child: const Text("取消"),
           ),
-        if (!downloading && !completed)
+        if (!downloading && !completed && !failed)
           TextButton(
-            onPressed: failed ? _downloadAndInstall : () => Navigator.pop(context),
-            child: Text(failed ? "重试" : "取消"),
+            onPressed: () => Navigator.pop(context),
+            child: const Text("取消"),
           ),
+        if (failed) ...[
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("取消"),
+          ),
+          FilledButton(
+            onPressed: _downloadAndInstall,
+            child: const Text("重试"),
+          ),
+        ],
         if (completed)
           FilledButton.icon(
             onPressed: () => _prepareInstall(downloadedPath!),
