@@ -15,7 +15,7 @@ import 'recommendations.dart';
 const String repository = "BaiXiaoTao520/New-ZexNote";
 const String repositoryUrl = "https://github.com/$repository";
 const String githubLatestApkUrl = "$repositoryUrl/releases/latest/download/app-release.apk";
-const String currentVersion = "2.0.3";
+const String currentVersion = "2.1.0";
 const String mirrorResId = String.fromEnvironment("MIRROR_RES_ID");
 const String mirrorApiUrl = "https://mirrorchyan.com/api/resources/$mirrorResId/latest";
 const String mirrorProjectUrl = "https://mirrorchyan.com/zh/projects?rid=$mirrorResId";
@@ -616,10 +616,30 @@ class _MainPageState extends State<MainPage> {
         ? colorScheme.onPrimary
         : colorScheme.onPrimaryContainer;
     final unselectedNavigationForeground = colorScheme.onSurfaceVariant;
-    final pageSelectionMode = currentIndex == 0 ? selectionMode : archiveSelectionMode;
-    final pageSelectedNoteIds = currentIndex == 0 ? selectedNoteIds : selectedArchivedNoteIds;
-    return Scaffold(
-      body: Stack(
+    final pageSelectionMode = currentIndex == 0
+        ? selectionMode
+        : currentIndex == 1
+            ? archiveSelectionMode
+            : false;
+    final pageSelectedNoteIds = currentIndex == 0
+        ? selectedNoteIds
+        : currentIndex == 1
+            ? selectedArchivedNoteIds
+            : const <String>{};
+    return PopScope(
+      canPop: !pageSelectionMode,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop || !pageSelectionMode) return;
+        setState(() {
+          if (currentIndex == 0) {
+            selectedNoteIds.clear();
+          } else if (currentIndex == 1) {
+            selectedArchivedNoteIds.clear();
+          }
+        });
+      },
+      child: Scaffold(
+        body: Stack(
         children: [
           PageView(
             controller: pageCtrl,
@@ -748,6 +768,7 @@ class _MainPageState extends State<MainPage> {
               ),
             ),
         ],
+        ),
       ),
     );
   }
