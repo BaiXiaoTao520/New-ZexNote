@@ -77,16 +77,6 @@ const tomatoRecommendation = RecommendedApp(
   description: "开源简洁的番茄钟软件",
 );
 
-const apptekaRecommendation = RecommendedApp(
-  name: "Appteka",
-  version: "v23.0",
-  summary: "开源 Android 应用商店",
-  downloadUrl:
-      "https://gh.xmly.dev/https://github.com/solkin/appteka-android/releases/download/v23.0/appteka-23.0-1174.apk",
-  icon: Icons.storefront_outlined,
-  description: "Appteka is a free, open-source Android app store where users can discover, download, and share applications. Upload your own apps, explore creations from developers worldwide, and engage with the community through real-time discussions.",
-);
-
 const reveriePaintRecommendation = RecommendedApp(
   name: "ReveriePaint",
   version: "v1.3.0",
@@ -142,7 +132,6 @@ class AppRecommendationsPage extends StatelessWidget {
       reveriePaintRecommendation,
       starRingBrowserRecommendation,
       tomatoRecommendation,
-      apptekaRecommendation,
     ];
     return Scaffold(
       appBar: AppBar(title: const Text("应用推荐")),
