@@ -441,6 +441,7 @@ class _MainPageState extends State<MainPage> {
     onUpdateFound?.call();
     if (onUpdateFound != null) {
       await Future<void>.delayed(Duration.zero);
+      if (!mounted) return;
     }
     final shouldDownload = await showDialog<bool>(
           context: context,
@@ -1785,9 +1786,9 @@ class _UpdateCheckingDialogState extends State<UpdateCheckingDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text("检查更新"),
-      content: const SizedBox(
+    return const AlertDialog(
+      title: Text("检查更新"),
+      content: SizedBox(
         width: 280,
         child: Row(
           children: [
