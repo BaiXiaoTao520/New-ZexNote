@@ -52,4 +52,4 @@
 
 ## ☕ 赞助作者
 如果这个项目对你有帮助，请请我喝杯咖啡支持开发喵～
-https://asleep-blue-kqij3r4v.edgeone.dev/
+<img width="1213" height="1213" alt="Image" src="https://github.com/user-attachments/assets/f73bb41f-da30-4615-8daf-857ea9ffb5b9" />
