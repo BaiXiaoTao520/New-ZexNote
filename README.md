@@ -10,7 +10,7 @@
 
 ## 📱 设备支持
 - CPU架构：**仅ARM64（arm64-v8a）**，不支持32位arm、x86架构
-- 安卓版本：Android 9.0 (API 28) 及以上（已适配 Android 9–14）
+- 安卓版本：Android 9.0 (API 28) 及以上（已适配 Android 9–16）
 
 ## 🔄 双通道版本更新系统
 1. **双通道检测版本**：优先 GitHub Releases API，遇到IP限流自动切换 Releases Atom 订阅源，规避访问频控
@@ -49,3 +49,7 @@
 
 ## 📄 开源协议
 本项目采用自定义开源许可协议，详见 `LICENSE` 文件
+
+## ☕ 赞助作者
+如果这个项目对你有帮助，请请我喝杯咖啡支持开发喵～
+<img width="1213" height="1213" alt="Image" src="https://github.com/user-attachments/assets/f73bb41f-da30-4615-8daf-857ea9ffb5b9" />

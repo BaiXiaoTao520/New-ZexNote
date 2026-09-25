@@ -96,15 +96,15 @@ jobs:
                   localProperties.load(reader)
               }
           }
-          def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '9'
-          def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '2.0.1'
+          def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '10'
+          def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '2.0.3'
           android {
               namespace "com.zex.note"
-              compileSdk 34
+              compileSdk 36
               defaultConfig {
                   applicationId "com.zex.note"
                   minSdk 28
-                  targetSdk 34
+                  targetSdk 36
                   versionCode flutterVersionCode.toInteger()
                   versionName flutterVersionName
                   ndk {
