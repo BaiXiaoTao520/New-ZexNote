@@ -14,7 +14,11 @@ import 'recommendations.dart';
 
 const String repository = "BaiXiaoTao520/New-ZexNote";
 const String repositoryUrl = "https://github.com/$repository";
-const String currentVersion = "1.5.1";
+const String githubLatestApkUrl = "$repositoryUrl/releases/latest/download/app-release.apk";
+const String currentVersion = "2.0.0";
+const String mirrorResId = String.fromEnvironment("MIRROR_RES_ID");
+const String mirrorApiUrl = "https://mirrorchyan.com/api/resources/$mirrorResId/latest";
+const String mirrorProjectUrl = "https://mirrorchyan.com/zh/projects?rid=$mirrorResId";
 
 final ValueNotifier<bool> globalDynamicColorNotifier = ValueNotifier(true);
 final ValueNotifier<bool> globalNavigationBlurNotifier = ValueNotifier(true);
@@ -116,6 +120,7 @@ class UpdateInfo {
   final String downloadUrl;
   final String updateLog;
   final String source;
+  final String? mirrorUrl;
 
   const UpdateInfo({
     required this.tagName,
@@ -123,9 +128,20 @@ class UpdateInfo {
     required this.downloadUrl,
     required this.updateLog,
     required this.source,
+    this.mirrorUrl,
   });
 
   String get displayVersion => normalizeVersion(tagName);
+}
+
+class MirrorUpdateInfo {
+  final String versionName;
+  final String releaseNote;
+
+  const MirrorUpdateInfo({
+    required this.versionName,
+    required this.releaseNote,
+  });
 }
 
 String normalizeVersion(String value) {
@@ -159,6 +175,42 @@ String _atomTag(String entry) {
   return versionMatch?.group(0) ?? title;
 }
 
+String? _mirrorString(Map<String, dynamic> data, List<String> keys) {
+  for (final key in keys) {
+    final value = data[key];
+    if (value is String && value.trim().isNotEmpty) return value.trim();
+  }
+  return null;
+}
+
+Future<MirrorUpdateInfo?> _getMirrorUpdate() async {
+  if (mirrorResId.isEmpty) return null;
+  try {
+    final query = <String, String>{
+      "current_version": "v$currentVersion",
+      "os": "android",
+      "arch": "arm64",
+    };
+    final response = await http.get(
+      Uri.parse(mirrorApiUrl).replace(queryParameters: query),
+      headers: const {"Accept": "application/json"},
+    );
+    if (response.statusCode != 200) return null;
+
+    final payload = jsonDecode(response.body) as Map<String, dynamic>;
+    if (payload["code"]?.toString() != "0") return null;
+    final data = payload["data"] as Map<String, dynamic>?;
+    if (data == null) return null;
+
+    return MirrorUpdateInfo(
+      versionName: _mirrorString(data, ["version_name"]) ?? "",
+      releaseNote: _mirrorString(data, ["release_note"]) ?? "",
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
 Future<UpdateInfo?> _getUpdateFromApi() async {
   final response = await http.get(
     Uri.parse("https://api.github.com/repos/$repository/releases/latest"),
@@ -182,7 +234,7 @@ Future<UpdateInfo?> _getUpdateFromApi() async {
   return UpdateInfo(
     tagName: tagName,
     releaseUrl: htmlUrl,
-    downloadUrl: apk?["browser_download_url"] as String? ?? "",
+    downloadUrl: apk?["browser_download_url"] as String? ?? githubLatestApkUrl,
     updateLog: data["body"] as String? ?? "",
     source: "GitHub Releases API",
   );
@@ -206,7 +258,7 @@ Future<UpdateInfo?> _getUpdateFromAtom() async {
   return UpdateInfo(
     tagName: tagName,
     releaseUrl: releaseUrl,
-    downloadUrl: "",
+    downloadUrl: githubLatestApkUrl,
     updateLog: _xmlValue(entry, "summary"),
     source: "Releases Atom",
   );
@@ -275,16 +327,36 @@ class _MainPageState extends State<MainPage> {
   }
 
   Future<UpdateInfo?> _fetchLatestUpdate() async {
+    UpdateInfo? githubInfo;
     try {
-      final apiInfo = await _getUpdateFromApi();
-      if (apiInfo != null) return apiInfo;
+      githubInfo = await _getUpdateFromApi();
     } catch (_) {}
 
-    try {
-      return await _getUpdateFromAtom();
-    } catch (_) {
-      return null;
+    if (githubInfo == null) {
+      try {
+        githubInfo = await _getUpdateFromAtom();
+      } catch (_) {}
     }
+
+    final prefs = await SharedPreferences.getInstance();
+    if (!(prefs.getBool("mirrorDownloadEnabled") ?? true)) return githubInfo;
+
+    final mirror = await _getMirrorUpdate();
+    if (mirror == null || mirror.versionName.isEmpty) return githubInfo;
+    if (githubInfo != null && compareVersions(mirror.versionName, githubInfo.displayVersion) < 0) {
+      return githubInfo;
+    }
+
+    final sameVersion = githubInfo != null && compareVersions(mirror.versionName, githubInfo.displayVersion) == 0;
+    final githubFallback = sameVersion ? githubInfo!.downloadUrl : "";
+    return UpdateInfo(
+      tagName: mirror.versionName,
+      releaseUrl: githubInfo?.releaseUrl ?? "$repositoryUrl/releases",
+      downloadUrl: githubFallback,
+      updateLog: mirror.releaseNote.isNotEmpty ? mirror.releaseNote : (githubInfo?.updateLog ?? ""),
+      source: "Mirror酱 API",
+      mirrorUrl: mirrorProjectUrl,
+    );
   }
 
   Future<void> checkVersion({bool showNoUpdateToast = true}) async {
@@ -683,6 +755,14 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
     } catch (_) {}
   }
 
+  Future<bool> _verifyApkSignature(String path) async {
+    try {
+      return await installerChannel.invokeMethod<bool>("verifyApkSignature", {"path": path}) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> _installApk(String path) async {
     try {
       await installerChannel.invokeMethod<void>("installApk", {"path": path});
@@ -815,13 +895,18 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
       await sink.flush();
       await sink.close();
       sink = null;
+
+      if (!await _verifyApkSignature(file.path)) {
+        await file.delete();
+        throw const HttpException("APK signature mismatch");
+      }
       if (!mounted) return;
       setState(() {
         downloading = false;
         downloadedPath = file.path;
-        status = "下载完成";
+        status = "下载完成，校验通过";
       });
-      showAppToast(context, "下载完成");
+      showAppToast(context, "下载完成，校验通过");
     } catch (_) {
       await sink?.close();
       if (downloadCancelled) return;
@@ -891,12 +976,29 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
             icon: const Icon(Icons.download),
             label: const Text("应用内更新"),
           ),
+        if (widget.update.mirrorUrl != null)
+          TextButton.icon(
+            onPressed: () async {
+              final launched = await launchUrl(
+                Uri.parse(widget.update.mirrorUrl!),
+                mode: LaunchMode.externalApplication,
+              );
+              if (!launched && context.mounted) {
+                showAppToast(context, "无法打开浏览器", isError: true);
+              }
+            },
+            icon: const Icon(Icons.speed),
+            label: const Text("Mirror酱高速下载"),
+          ),
         TextButton.icon(
           onPressed: () async {
-            await launchUrl(
+            final launched = await launchUrl(
               Uri.parse(widget.update.releaseUrl),
               mode: LaunchMode.externalApplication,
             );
+            if (!launched && context.mounted) {
+              showAppToast(context, "无法打开浏览器", isError: true);
+            }
           },
           icon: const Icon(Icons.open_in_new),
           label: const Text("浏览器下载"),
@@ -1024,7 +1126,10 @@ class NoteHomePage extends StatelessWidget {
                 return Card(
                   color: note.color,
                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  clipBehavior: Clip.antiAlias,
                   child: ListTile(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     onTap: () => selectionMode ? onToggleSelection(note) : onOpenNote(note),
                     onLongPress: () => onToggleSelection(note),
                     leading: selectionMode
@@ -1110,7 +1215,10 @@ class ArchivePage extends StatelessWidget {
                 return Card(
                   color: note.color,
                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  clipBehavior: Clip.antiAlias,
                   child: ListTile(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     onTap: () => selectionMode ? onToggleSelection(note) : onOpenNote(note),
                     onLongPress: () => onToggleSelection(note),
                     leading: selectionMode
@@ -1495,6 +1603,7 @@ class UpdateSettingsPage extends StatefulWidget {
 
 class _UpdateSettingsPageState extends State<UpdateSettingsPage> {
   bool autoCheck = true;
+  bool mirrorEnabled = true;
   bool checking = false;
 
   @override
@@ -1505,7 +1614,12 @@ class _UpdateSettingsPageState extends State<UpdateSettingsPage> {
 
   Future<void> _loadPreference() async {
     final prefs = await SharedPreferences.getInstance();
-    if (mounted) setState(() => autoCheck = prefs.getBool("autoCheckUpdate") ?? true);
+    if (mounted) {
+      setState(() {
+        autoCheck = prefs.getBool("autoCheckUpdate") ?? true;
+        mirrorEnabled = prefs.getBool("mirrorDownloadEnabled") ?? true;
+      });
+    }
   }
 
   Future<void> _checkForUpdates() async {
@@ -1535,6 +1649,17 @@ class _UpdateSettingsPageState extends State<UpdateSettingsPage> {
               final prefs = await SharedPreferences.getInstance();
               await prefs.setBool("autoCheckUpdate", value);
               if (mounted) setState(() => autoCheck = value);
+            },
+          ),
+          SwitchListTile(
+            secondary: const Icon(Icons.speed),
+            title: const Text("Mirror酱高速下载"),
+            subtitle: const Text("国内免梯高速CDN镜像下载最新安装包"),
+            value: mirrorEnabled,
+            onChanged: (value) async {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setBool("mirrorDownloadEnabled", value);
+              if (mounted) setState(() => mirrorEnabled = value);
             },
           ),
           ListTile(

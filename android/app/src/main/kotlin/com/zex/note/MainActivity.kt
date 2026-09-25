@@ -72,6 +72,10 @@ class MainActivity : FlutterActivity() {
                         }
                         startActivityForResult(intent, createTextFileRequestCode)
                     }
+                    "verifyApkSignature" -> {
+                        val path = call.argument<String>("path")
+                        result.success(path != null && hasSameApkSignature(File(path)))
+                    }
                     "installApk" -> {
                         val path = call.argument<String>("path")
                         if (path == null) {
@@ -95,6 +99,33 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun hasSameApkSignature(apkFile: File): Boolean {
+        if (!apkFile.isFile) return false
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            PackageManager.GET_SIGNING_CERTIFICATES
+        } else {
+            PackageManager.GET_SIGNATURES
+        }
+        val downloadedInfo = packageManager.getPackageArchiveInfo(apkFile.path, flags) ?: return false
+        val installedInfo = packageManager.getPackageInfo(packageName, flags)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val downloadedSigners = downloadedInfo.signingInfo?.apkContentsSigners
+                ?.map { it.toCharsString() }
+                ?.toSet()
+                ?: return false
+            val installedSigners = installedInfo.signingInfo?.apkContentsSigners
+                ?.map { it.toCharsString() }
+                ?.toSet()
+                ?: return false
+            return downloadedSigners == installedSigners
+        }
+
+        val downloadedSigners = downloadedInfo.signatures?.map { it.toCharsString() }?.toSet()
+        val installedSigners = installedInfo.signatures?.map { it.toCharsString() }?.toSet()
+        return downloadedSigners != null && downloadedSigners == installedSigners
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {

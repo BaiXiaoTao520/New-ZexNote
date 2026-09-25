@@ -96,14 +96,14 @@ jobs:
                   localProperties.load(reader)
               }
           }
-          def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '7'
-          def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '1.5.1'
+          def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '8'
+          def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '2.0.0'
           android {
               namespace "com.zex.note"
               compileSdk 34
               defaultConfig {
                   applicationId "com.zex.note"
-                  minSdk 26
+                  minSdk 28
                   targetSdk 34
                   versionCode flutterVersionCode.toInteger()
                   versionName flutterVersionName
@@ -211,6 +211,10 @@ jobs:
                                   }
                                   startActivityForResult(intent, createTextFileRequestCode)
                               }
+                              "verifyApkSignature" -> {
+                                  val path = call.argument<String>("path")
+                                  result.success(path != null && hasSameApkSignature(File(path)))
+                              }
                               "installApk" -> {
                                   val path = call.argument<String>("path")
                                   if (path == null) {
@@ -229,6 +233,33 @@ jobs:
                               else -> result.notImplemented()
                           }
                       }
+              }
+
+              @Suppress("DEPRECATION")
+              private fun hasSameApkSignature(apkFile: File): Boolean {
+                  if (!apkFile.isFile) return false
+                  val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                      PackageManager.GET_SIGNING_CERTIFICATES
+                  } else {
+                      PackageManager.GET_SIGNATURES
+                  }
+                  val downloadedInfo = packageManager.getPackageArchiveInfo(apkFile.path, flags) ?: return false
+                  val installedInfo = packageManager.getPackageInfo(packageName, flags)
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                      val downloadedSigners = downloadedInfo.signingInfo?.apkContentsSigners
+                          ?.map { it.toCharsString() }
+                          ?.toSet()
+                          ?: return false
+                      val installedSigners = installedInfo.signingInfo?.apkContentsSigners
+                          ?.map { it.toCharsString() }
+                          ?.toSet()
+                          ?: return false
+                      return downloadedSigners == installedSigners
+                  }
+
+                  val downloadedSigners = downloadedInfo.signatures?.map { it.toCharsString() }?.toSet()
+                  val installedSigners = installedInfo.signatures?.map { it.toCharsString() }?.toSet()
+                  return downloadedSigners != null && downloadedSigners == installedSigners
               }
 
               override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -297,7 +328,9 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
       - name: 编译Release APK（仅arm64）
-        run: flutter build apk --release --target-platform android-arm64
+        env:
+          MIRROR_RES_ID: ${{ secrets.MIRROR_RES_ID }}
+        run: flutter build apk --release --target-platform android-arm64 --dart-define=MIRROR_RES_ID="$MIRROR_RES_ID"
 
       - name: 准备系统环境工具 (安装 apksigner)
         run: sudo apt-get update && sudo apt-get install -y apksigner
