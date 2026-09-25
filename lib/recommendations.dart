@@ -138,7 +138,10 @@ class RecommendationCard extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      clipBehavior: Clip.antiAlias,
       child: ListTile(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
         leading: CircleAvatar(
           backgroundColor: colors.primaryContainer,

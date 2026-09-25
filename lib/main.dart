@@ -5,7 +5,6 @@ import 'dart:ui';
 
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -20,7 +19,6 @@ const String currentVersion = "2.0.0";
 const String mirrorResId = String.fromEnvironment("MIRROR_RES_ID");
 const String mirrorApiUrl = "https://mirrorchyan.com/api/resources/$mirrorResId/latest";
 const String mirrorProjectUrl = "https://mirrorchyan.com/zh/projects?rid=$mirrorResId";
-const FlutterSecureStorage secureStorage = FlutterSecureStorage();
 
 final ValueNotifier<bool> globalDynamicColorNotifier = ValueNotifier(true);
 final ValueNotifier<bool> globalNavigationBlurNotifier = ValueNotifier(true);
@@ -185,16 +183,6 @@ String? _mirrorString(Map<String, dynamic> data, List<String> keys) {
   return null;
 }
 
-Future<String?> _readMirrorCdk() async {
-  try {
-    final cdk = await secureStorage.read(key: "mirror_cdk");
-    final value = cdk?.trim();
-    return value == null || value.isEmpty ? null : value;
-  } catch (_) {
-    return null;
-  }
-}
-
 Future<MirrorUpdateInfo?> _getMirrorUpdate() async {
   if (mirrorResId.isEmpty) return null;
   try {
@@ -203,9 +191,6 @@ Future<MirrorUpdateInfo?> _getMirrorUpdate() async {
       "os": "android",
       "arch": "arm64",
     };
-    final cdk = await _readMirrorCdk();
-    if (cdk != null) query["cdk"] = cdk;
-
     final response = await http.get(
       Uri.parse(mirrorApiUrl).replace(queryParameters: query),
       headers: const {"Accept": "application/json"},
@@ -1141,7 +1126,10 @@ class NoteHomePage extends StatelessWidget {
                 return Card(
                   color: note.color,
                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  clipBehavior: Clip.antiAlias,
                   child: ListTile(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     onTap: () => selectionMode ? onToggleSelection(note) : onOpenNote(note),
                     onLongPress: () => onToggleSelection(note),
                     leading: selectionMode
@@ -1227,7 +1215,10 @@ class ArchivePage extends StatelessWidget {
                 return Card(
                   color: note.color,
                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  clipBehavior: Clip.antiAlias,
                   child: ListTile(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     onTap: () => selectionMode ? onToggleSelection(note) : onOpenNote(note),
                     onLongPress: () => onToggleSelection(note),
                     leading: selectionMode
@@ -1613,7 +1604,6 @@ class UpdateSettingsPage extends StatefulWidget {
 class _UpdateSettingsPageState extends State<UpdateSettingsPage> {
   bool autoCheck = true;
   bool mirrorEnabled = true;
-  bool cdkConfigured = false;
   bool checking = false;
 
   @override
@@ -1624,60 +1614,12 @@ class _UpdateSettingsPageState extends State<UpdateSettingsPage> {
 
   Future<void> _loadPreference() async {
     final prefs = await SharedPreferences.getInstance();
-    final cdk = await _readMirrorCdk();
     if (mounted) {
       setState(() {
         autoCheck = prefs.getBool("autoCheckUpdate") ?? true;
         mirrorEnabled = prefs.getBool("mirrorDownloadEnabled") ?? true;
-        cdkConfigured = cdk != null;
       });
     }
-  }
-
-  Future<void> _editCdk() async {
-    final controller = TextEditingController();
-    final existing = await _readMirrorCdk();
-    controller.text = existing ?? "";
-    if (!mounted) {
-      controller.dispose();
-      return;
-    }
-
-    final value = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text("Mirror酱 CDK"),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          obscureText: true,
-          enableSuggestions: false,
-          autocorrect: false,
-          decoration: const InputDecoration(
-            labelText: "CDK",
-            hintText: "留空表示不使用 CDK",
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text("取消"),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
-            child: const Text("保存"),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    if (value == null) return;
-    if (value.isEmpty) {
-      await secureStorage.delete(key: "mirror_cdk");
-    } else {
-      await secureStorage.write(key: "mirror_cdk", value: value);
-    }
-    if (mounted) setState(() => cdkConfigured = value.isNotEmpty);
   }
 
   Future<void> _checkForUpdates() async {
@@ -1719,13 +1661,6 @@ class _UpdateSettingsPageState extends State<UpdateSettingsPage> {
               await prefs.setBool("mirrorDownloadEnabled", value);
               if (mounted) setState(() => mirrorEnabled = value);
             },
-          ),
-          ListTile(
-            leading: const Icon(Icons.key),
-            title: const Text("Mirror酱 CDK"),
-            subtitle: Text(cdkConfigured ? "已配置，内容已安全保存" : "未配置，使用公共更新信息"),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: _editCdk,
           ),
           ListTile(
             leading: const Icon(Icons.search),
