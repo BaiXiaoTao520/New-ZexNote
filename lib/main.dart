@@ -15,7 +15,7 @@ import 'recommendations.dart';
 const String repository = "BaiXiaoTao520/New-ZexNote";
 const String repositoryUrl = "https://github.com/$repository";
 const String githubLatestApkUrl = "$repositoryUrl/releases/latest/download/app-release.apk";
-const String currentVersion = "2.0.0";
+const String currentVersion = "2.0.1";
 const String mirrorResId = String.fromEnvironment("MIRROR_RES_ID");
 const String mirrorApiUrl = "https://mirrorchyan.com/api/resources/$mirrorResId/latest";
 const String mirrorProjectUrl = "https://mirrorchyan.com/zh/projects?rid=$mirrorResId";
@@ -237,6 +237,7 @@ Future<UpdateInfo?> _getUpdateFromApi() async {
     downloadUrl: apk?["browser_download_url"] as String? ?? githubLatestApkUrl,
     updateLog: data["body"] as String? ?? "",
     source: "GitHub Releases API",
+    mirrorUrl: mirrorResId.isEmpty ? null : mirrorProjectUrl,
   );
 }
 
@@ -261,6 +262,7 @@ Future<UpdateInfo?> _getUpdateFromAtom() async {
     downloadUrl: githubLatestApkUrl,
     updateLog: _xmlValue(entry, "summary"),
     source: "Releases Atom",
+    mirrorUrl: mirrorResId.isEmpty ? null : mirrorProjectUrl,
   );
 }
 
@@ -337,9 +339,6 @@ class _MainPageState extends State<MainPage> {
         githubInfo = await _getUpdateFromAtom();
       } catch (_) {}
     }
-
-    final prefs = await SharedPreferences.getInstance();
-    if (!(prefs.getBool("mirrorDownloadEnabled") ?? true)) return githubInfo;
 
     final mirror = await _getMirrorUpdate();
     if (mirror == null || mirror.versionName.isEmpty) return githubInfo;
@@ -978,6 +977,12 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
           ),
         if (widget.update.mirrorUrl != null)
           TextButton.icon(
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: const Size(0, 40),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: VisualDensity.compact,
+            ),
             onPressed: () async {
               final launched = await launchUrl(
                 Uri.parse(widget.update.mirrorUrl!),
@@ -987,8 +992,14 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
                 showAppToast(context, "无法打开浏览器", isError: true);
               }
             },
-            icon: const Icon(Icons.speed),
-            label: const Text("Mirror酱高速下载"),
+            icon: const Icon(Icons.speed, size: 18),
+            label: const Text(
+              "Mirror酱高速下载",
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12),
+            ),
           ),
         TextButton.icon(
           onPressed: () async {
@@ -1603,7 +1614,6 @@ class UpdateSettingsPage extends StatefulWidget {
 
 class _UpdateSettingsPageState extends State<UpdateSettingsPage> {
   bool autoCheck = true;
-  bool mirrorEnabled = true;
   bool checking = false;
 
   @override
@@ -1617,7 +1627,6 @@ class _UpdateSettingsPageState extends State<UpdateSettingsPage> {
     if (mounted) {
       setState(() {
         autoCheck = prefs.getBool("autoCheckUpdate") ?? true;
-        mirrorEnabled = prefs.getBool("mirrorDownloadEnabled") ?? true;
       });
     }
   }
@@ -1651,15 +1660,24 @@ class _UpdateSettingsPageState extends State<UpdateSettingsPage> {
               if (mounted) setState(() => autoCheck = value);
             },
           ),
-          SwitchListTile(
-            secondary: const Icon(Icons.speed),
+          ListTile(
+            leading: const Icon(Icons.speed),
             title: const Text("Mirror酱高速下载"),
-            subtitle: const Text("国内免梯高速CDN镜像下载最新安装包"),
-            value: mirrorEnabled,
-            onChanged: (value) async {
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.setBool("mirrorDownloadEnabled", value);
-              if (mounted) setState(() => mirrorEnabled = value);
+            subtitle: const Text(
+              "国内免梯高速CDN镜像下载最新安装包",
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: const Icon(Icons.open_in_new, size: 20),
+            onTap: () async {
+              final launched = await launchUrl(
+                Uri.parse(mirrorProjectUrl),
+                mode: LaunchMode.externalApplication,
+              );
+              if (!launched && context.mounted) {
+                showAppToast(context, "无法打开浏览器", isError: true);
+              }
             },
           ),
           ListTile(
