@@ -15,6 +15,7 @@ class RecommendedApp {
   final String downloadUrl;
   final IconData icon;
   final bool browserOnly;
+  final bool browserDirect;
 
   const RecommendedApp({
     required this.name,
@@ -24,6 +25,7 @@ class RecommendedApp {
     required this.downloadUrl,
     required this.icon,
     this.browserOnly = false,
+    this.browserDirect = false,
   });
 }
 
@@ -52,6 +54,37 @@ AppShare 会在用户上传新版本后提醒您更新应用，没有先后顺�
 
 日渐完善的资产系统
 您可以通过一些 App 任务获取积分或分享值，从而无限制下载 AppShare 内的资源；资源上传者也可以通过其他人的下载获得分享值，用于兑换高级功能或奖励。""",
+);
+
+const starRingBrowserRecommendation = RecommendedApp(
+  name: "星环浏览器-标准版",
+  version: "",
+  summary: "新一代星环，不止是浏览器，更是你的生活伴侣。",
+  downloadUrl: "https://roamexplore.rth1.xyz/",
+  icon: Icons.public,
+  browserOnly: true,
+  browserDirect: true,
+  description: "新一代星环，不止是浏览器，更是你的生活伴侣。",
+);
+
+const tomatoRecommendation = RecommendedApp(
+  name: "Tomato",
+  version: "v2.0.1",
+  summary: "开源简洁的番茄钟软件",
+  downloadUrl:
+      "https://gh.xmly.dev/https://github.com/nsh07/Tomato/releases/download/v2.0.1/tomato-v2.0.1-release.apk",
+  icon: Icons.timer_outlined,
+  description: "开源简洁的番茄钟软件",
+);
+
+const apptekaRecommendation = RecommendedApp(
+  name: "Appteka",
+  version: "v23.0",
+  summary: "开源 Android 应用商店",
+  downloadUrl:
+      "https://gh.xmly.dev/https://github.com/solkin/appteka-android/releases/download/v23.0/appteka-23.0-1174.apk",
+  icon: Icons.storefront_outlined,
+  description: "Appteka is a free, open-source Android app store where users can discover, download, and share applications. Upload your own apps, explore creations from developers worldwide, and engage with the community through real-time discussions.",
 );
 
 const reveriePaintRecommendation = RecommendedApp(
@@ -104,7 +137,13 @@ class AppRecommendationsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final recommendations = [appShareRecommendation, reveriePaintRecommendation];
+    final recommendations = [
+      appShareRecommendation,
+      reveriePaintRecommendation,
+      starRingBrowserRecommendation,
+      tomatoRecommendation,
+      apptekaRecommendation,
+    ];
     return Scaffold(
       appBar: AppBar(title: const Text("应用推荐")),
       body: ListView(
@@ -192,13 +231,23 @@ class RecommendationInfoDialog extends StatelessWidget {
           child: const Text("取消"),
         ),
         FilledButton.icon(
-          onPressed: () {
+          onPressed: () async {
             Navigator.pop(context);
             if (app.browserOnly) {
-              showDialog<void>(
-                context: context,
-                builder: (dialogContext) => const BrowserDownloadInfoDialog(),
-              );
+              if (app.browserDirect) {
+                final launched = await launchUrl(
+                  Uri.parse(app.downloadUrl),
+                  mode: LaunchMode.externalApplication,
+                );
+                if (!launched && context.mounted) {
+                  showAppToast(context, "无法打开浏览器", isError: true);
+                }
+              } else {
+                showDialog<void>(
+                  context: context,
+                  builder: (dialogContext) => const BrowserDownloadInfoDialog(),
+                );
+              }
             } else {
               showDialog<void>(
                 context: context,
