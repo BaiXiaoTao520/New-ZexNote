@@ -15,10 +15,13 @@ import 'recommendations.dart';
 const String repository = "BaiXiaoTao520/New-ZexNote";
 const String repositoryUrl = "https://github.com/$repository";
 const String githubLatestApkUrl = "$repositoryUrl/releases/latest/download/app-release.apk";
-const String currentVersion = "2.0.1";
+const String currentVersion = "2.0.3";
 const String mirrorResId = String.fromEnvironment("MIRROR_RES_ID");
 const String mirrorApiUrl = "https://mirrorchyan.com/api/resources/$mirrorResId/latest";
 const String mirrorProjectUrl = "https://mirrorchyan.com/zh/projects?rid=$mirrorResId";
+const String contributorsApiUrl = "https://api.github.com/repos/$repository/contributors";
+
+typedef CheckUpdateCallback = Future<void> Function({VoidCallback? onUpdateFound});
 
 final ValueNotifier<bool> globalDynamicColorNotifier = ValueNotifier(true);
 final ValueNotifier<bool> globalNavigationBlurNotifier = ValueNotifier(true);
@@ -144,6 +147,18 @@ class MirrorUpdateInfo {
   });
 }
 
+class ContributorInfo {
+  final String username;
+  final String avatarUrl;
+  final String profileUrl;
+
+  const ContributorInfo({
+    required this.username,
+    required this.avatarUrl,
+    required this.profileUrl,
+  });
+}
+
 String normalizeVersion(String value) {
   final version = value.trim().replaceFirst(RegExp(r"^[vV]"), "");
   return version.split("+").first;
@@ -208,6 +223,50 @@ Future<MirrorUpdateInfo?> _getMirrorUpdate() async {
     );
   } catch (_) {
     return null;
+  }
+}
+
+Future<List<ContributorInfo>> _getContributors() async {
+  final contributors = <ContributorInfo>[];
+  var page = 1;
+  const perPage = 100;
+
+  while (true) {
+    final response = await http.get(
+      Uri.parse(contributorsApiUrl).replace(
+        queryParameters: {
+          "per_page": "$perPage",
+          "page": "$page",
+        },
+      ),
+      headers: const {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+    );
+    if (response.statusCode != 200) {
+      throw HttpException("contributors request failed: ${response.statusCode}");
+    }
+
+    final data = jsonDecode(response.body) as List<dynamic>;
+    for (final item in data) {
+      final contributor = item as Map<String, dynamic>;
+      final username = contributor["login"] as String? ?? "";
+      final avatarUrl = contributor["avatar_url"] as String? ?? "";
+      final profileUrl = contributor["html_url"] as String? ?? "";
+      if (username.isNotEmpty && avatarUrl.isNotEmpty && profileUrl.isNotEmpty) {
+        contributors.add(
+          ContributorInfo(
+            username: username,
+            avatarUrl: avatarUrl,
+            profileUrl: profileUrl,
+          ),
+        );
+      }
+    }
+
+    if (data.length < perPage) return contributors;
+    page++;
   }
 }
 
@@ -358,7 +417,10 @@ class _MainPageState extends State<MainPage> {
     );
   }
 
-  Future<void> checkVersion({bool showNoUpdateToast = true}) async {
+  Future<void> checkVersion({
+    bool showNoUpdateToast = true,
+    VoidCallback? onUpdateFound,
+  }) async {
     final update = await _fetchLatestUpdate();
     if (!mounted) return;
 
@@ -376,6 +438,10 @@ class _MainPageState extends State<MainPage> {
       return;
     }
 
+    onUpdateFound?.call();
+    if (onUpdateFound != null) {
+      await Future<void>.delayed(Duration.zero);
+    }
     final shouldDownload = await showDialog<bool>(
           context: context,
           builder: (context) => UpdateDialog(update: update),
@@ -575,7 +641,7 @@ class _MainPageState extends State<MainPage> {
                 onToggleSelectAll: toggleArchivedSelectAll,
               ),
               const AppRecommendationsPage(),
-              SettingPage(onCheckUpdate: () => checkVersion(showNoUpdateToast: true)),
+              SettingPage(onCheckUpdate: checkVersion),
             ],
           ),
           Positioned(
@@ -1526,7 +1592,7 @@ class _NoteEditPageState extends State<NoteEditPage> {
 }
 
 class SettingPage extends StatelessWidget {
-  final Future<void> Function() onCheckUpdate;
+  final CheckUpdateCallback onCheckUpdate;
   const SettingPage({super.key, required this.onCheckUpdate});
 
   @override
@@ -1605,7 +1671,7 @@ class SettingPage extends StatelessWidget {
 }
 
 class UpdateSettingsPage extends StatefulWidget {
-  final Future<void> Function() onCheckUpdate;
+  final CheckUpdateCallback onCheckUpdate;
   const UpdateSettingsPage({super.key, required this.onCheckUpdate});
 
   @override
@@ -1614,7 +1680,6 @@ class UpdateSettingsPage extends StatefulWidget {
 
 class _UpdateSettingsPageState extends State<UpdateSettingsPage> {
   bool autoCheck = true;
-  bool checking = false;
 
   @override
   void initState() {
@@ -1632,13 +1697,13 @@ class _UpdateSettingsPageState extends State<UpdateSettingsPage> {
   }
 
   Future<void> _checkForUpdates() async {
-    if (checking) return;
-    setState(() => checking = true);
-    try {
-      await widget.onCheckUpdate();
-    } finally {
-      if (mounted) setState(() => checking = false);
-    }
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => UpdateCheckingDialog(
+        onCheckUpdate: widget.onCheckUpdate,
+      ),
+    );
   }
 
   @override
@@ -1648,7 +1713,6 @@ class _UpdateSettingsPageState extends State<UpdateSettingsPage> {
       body: ListView(
         padding: const EdgeInsets.only(bottom: 160),
         children: [
-          if (checking) const LinearProgressIndicator(minHeight: 3),
           SwitchListTile(
             secondary: const Icon(Icons.update),
             title: const Text("启动时自动检查更新"),
@@ -1686,6 +1750,56 @@ class _UpdateSettingsPageState extends State<UpdateSettingsPage> {
             onTap: _checkForUpdates,
           ),
         ],
+      ),
+    );
+  }
+}
+
+class UpdateCheckingDialog extends StatefulWidget {
+  final CheckUpdateCallback onCheckUpdate;
+
+  const UpdateCheckingDialog({
+    super.key,
+    required this.onCheckUpdate,
+  });
+
+  @override
+  State<UpdateCheckingDialog> createState() => _UpdateCheckingDialogState();
+}
+
+class _UpdateCheckingDialogState extends State<UpdateCheckingDialog> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkForUpdates());
+  }
+
+  Future<void> _checkForUpdates() async {
+    await widget.onCheckUpdate(
+      onUpdateFound: () {
+        if (mounted) Navigator.pop(context);
+      },
+    );
+    if (mounted) Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text("检查更新"),
+      content: const SizedBox(
+        width: 280,
+        child: Row(
+          children: [
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 3),
+            ),
+            SizedBox(width: 16),
+            Expanded(child: Text("正在检查最新版本…")),
+          ],
+        ),
       ),
     );
   }
@@ -1888,6 +2002,16 @@ class AboutPage extends StatelessWidget {
                 onTap: () => _openRepository(context),
               ),
               ListTile(
+                leading: const Icon(Icons.groups_outlined),
+                title: const Text("贡献者鸣谢"),
+                subtitle: const Text("查看参与项目设计与代码贡献的开发者"),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => showDialog<void>(
+                  context: context,
+                  builder: (context) => const ContributorsDialog(),
+                ),
+              ),
+              ListTile(
                 leading: const Icon(Icons.menu_book_outlined),
                 title: const Text("第三方许可证"),
                 subtitle: const Text("查看应用使用的开源组件许可"),
@@ -1901,6 +2025,145 @@ class AboutPage extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class ContributorsDialog extends StatefulWidget {
+  const ContributorsDialog({super.key});
+
+  @override
+  State<ContributorsDialog> createState() => _ContributorsDialogState();
+}
+
+class _ContributorsDialogState extends State<ContributorsDialog> {
+  List<ContributorInfo>? contributors;
+  String? errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadContributors();
+  }
+
+  Future<void> _loadContributors() async {
+    try {
+      final result = await _getContributors();
+      if (!mounted) return;
+      setState(() => contributors = result);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => errorMessage = "无法加载贡献者列表，请检查网络后重试");
+    }
+  }
+
+  Future<void> _openContributor(ContributorInfo contributor) async {
+    final launched = await launchUrl(
+      Uri.parse(contributor.profileUrl),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!launched && mounted) {
+      showAppToast(context, "无法打开浏览器", isError: true);
+    }
+  }
+
+  Widget _buildContributor(ContributorInfo contributor) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => _openContributor(contributor),
+      child: SizedBox(
+        width: 112,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 56,
+              height: 56,
+              child: ClipOval(
+                child: Image.network(
+                  contributor.avatarUrl,
+                  width: 56,
+                  height: 56,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    alignment: Alignment.center,
+                    child: const Icon(Icons.person_outline, size: 30),
+                  ),
+                  loadingBuilder: (context, child, progress) {
+                    if (progress == null) return child;
+                    return const Center(
+                      child: SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              contributor.username,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContent(BuildContext context) {
+    if (contributors == null && errorMessage == null) {
+      return const SizedBox(
+        height: 220,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (errorMessage != null) {
+      return SizedBox(
+        height: 220,
+        child: Center(child: Text(errorMessage!, textAlign: TextAlign.center)),
+      );
+    }
+    if (contributors!.isEmpty) {
+      return const SizedBox(
+        height: 220,
+        child: Center(child: Text("暂无公开贡献者")),
+      );
+    }
+
+    return SizedBox(
+      height: 220,
+      child: GridView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.all(4),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          mainAxisExtent: 112,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+        ),
+        itemCount: contributors!.length,
+        itemBuilder: (context, index) => _buildContributor(contributors![index]),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text("贡献者鸣谢"),
+      content: _buildContent(context),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("确定"),
+        ),
+      ],
     );
   }
 }
