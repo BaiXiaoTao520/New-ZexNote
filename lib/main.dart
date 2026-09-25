@@ -348,7 +348,7 @@ class _MainPageState extends State<MainPage> {
     }
 
     final sameVersion = githubInfo != null && compareVersions(mirror.versionName, githubInfo.displayVersion) == 0;
-    final githubFallback = sameVersion ? githubInfo!.downloadUrl : "";
+    final githubFallback = sameVersion ? githubInfo.downloadUrl : "";
     return UpdateInfo(
       tagName: mirror.versionName,
       releaseUrl: githubInfo?.releaseUrl ?? "$repositoryUrl/releases",
