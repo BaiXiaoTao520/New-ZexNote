@@ -53,3 +53,7 @@
 ## ☕ 赞助作者
 如果这个项目对你有帮助，请请我喝杯咖啡支持开发喵～
 <img width="1213" height="1213" alt="Image" src="https://github.com/user-attachments/assets/f73bb41f-da30-4615-8daf-857ea9ffb5b9" />
+
+## 💌 反馈通道
+1.Github Issues
+2.入群反馈: [ZexNote用户交流群](https://qun.qq.com/universal-share/share?ac=1&authKey=DvOhQf0Uucy%2F7IFpHx76%2BD5wkEsbW4V12oPGNvlDcicpXItL6TlC9NxdLPWkJsE9&busi_data=eyJncm91cENvZGUiOiI2NzgxOTY0ODEiLCJ0b2tlbiI6IkhCRHVFR29mdzRocGFIbWg1UG90aUZFSXVMS3d4d2E3VzRuTHE2MzFDQU1rWnFJek5yL1pvTjhBcTJ5WTZrV0EiLCJ1aW4iOiIxNTM3NTE1MjU2In0%3D&data=PyYzqo4qiuTJguxnLkHCxXGzHPn-rRlbIXH3cj1jJCRxt7YVPStCzAlWPnbXra310f3dk3dDmgAMOdaZOqs2qg&svctype=4&tempid=h5_group_info)
