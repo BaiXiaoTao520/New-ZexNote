@@ -35,7 +35,7 @@ jobs:
 
     steps:
       - name: 拉取项目源码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: main
 
