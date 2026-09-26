@@ -96,8 +96,8 @@ jobs:
                   localProperties.load(reader)
               }
           }
-          def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '12'
-          def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '2.1.1'
+          def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '13'
+          def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '2.1.5'
           android {
               namespace "com.zex.note"
               compileSdk 36
@@ -347,6 +347,34 @@ jobs:
 
       - name: 列出编译产物
         run: ls -lh build/app/outputs/flutter-apk/
+
+      - name: 配置SSH签名环境
+        env:
+          SSH_SIGNING_PRIVATE_KEY: ${{ secrets.SSH_SIGNING_PRIVATE_KEY }}
+          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_SIGNING_PRIVATE_KEY"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_SIGNING_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          git config --global gpg.format ssh
+          git config --global user.signingkey "$HOME/.ssh/id_ed25519"
+          git config --global user.name "$GITHUB_REPOSITORY_OWNER"
+          git config --global user.email "$GITHUB_REPOSITORY_OWNER@users.noreply.github.com"
+
+      - name: 创建带SSH签名tag并推送到远程仓库
+        run: |
+          set -euo pipefail
+          VERSION=$(grep '^version:' pubspec.yaml | head -1 | awk '{print $2}' | cut -d+ -f1)
+          TAG="v${VERSION}"
+          git fetch --tags origin
+          if git rev-parse --verify "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists"
+            exit 1
+          fi
+          git tag -s "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
 
       - name: 发布Release，标记Latest
         uses: softprops/action-gh-release@v2
