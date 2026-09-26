@@ -77,6 +77,18 @@ const tomatoRecommendation = RecommendedApp(
   description: "开源简洁的番茄钟软件",
 );
 
+const komiStoreRecommendation = RecommendedApp(
+  name: "Komi Store",
+  version: "v1.9.2",
+  summary: "开源 Github 仓库应用商店",
+  downloadUrl:
+      "https://gh.xmly.dev/https://github.com/komi-store/komi-store/releases/download/v1.9.2/Komi-Store-1.9.2.apk",
+  icon: Icons.storefront_outlined,
+  description: """Komi Store only helps you discover and download release assets that are already published on GitHub by third-party developers. The contents, safety, and behavior of those downloads are entirely the responsibility of their respective authors and distributors, not this project.
+
+By using Komi Store, you understand and agree that you install and run any downloaded software at your own risk. This project does not review, validate, or guarantee that any installer is safe, free of malware, or fit for any particular purpose.""",
+);
+
 const reveriePaintRecommendation = RecommendedApp(
   name: "ReveriePaint",
   version: "v1.3.0",
@@ -132,6 +144,7 @@ class AppRecommendationsPage extends StatelessWidget {
       reveriePaintRecommendation,
       starRingBrowserRecommendation,
       tomatoRecommendation,
+      komiStoreRecommendation,
     ];
     return Scaffold(
       appBar: AppBar(title: const Text("应用推荐")),
