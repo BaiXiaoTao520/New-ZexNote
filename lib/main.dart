@@ -15,7 +15,7 @@ import 'recommendations.dart';
 const String repository = "BaiXiaoTao520/New-ZexNote";
 const String repositoryUrl = "https://github.com/$repository";
 const String githubLatestApkUrl = "$repositoryUrl/releases/latest/download/app-release.apk";
-const String currentVersion = "2.2.0";
+const String currentVersion = "2.2.1";
 const String mirrorResId = String.fromEnvironment("MIRROR_RES_ID");
 const String mirrorApiUrl = "https://mirrorchyan.com/api/resources/$mirrorResId/latest";
 const String mirrorProjectUrl = "https://mirrorchyan.com/zh/projects?rid=$mirrorResId";
@@ -347,12 +347,6 @@ class _MainPageState extends State<MainPage> {
     loadNotesFromStorage();
     loadNavigationBlurPreference();
     autoCheckUpdate();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _checkStoragePermissionOnStartup());
-  }
-
-  Future<void> _checkStoragePermissionOnStartup() async {
-    if (!mounted) return;
-    await ensureStoragePermission(context);
   }
 
   Future<void> loadNotesFromStorage() async {
