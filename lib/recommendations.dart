@@ -77,6 +77,15 @@ const tomatoRecommendation = RecommendedApp(
   description: "开源简洁的番茄钟软件",
 );
 
+const coolMonitorRecommendation = RecommendedApp(
+  name: "CoolMonitor",
+  version: "v5.3.2",
+  summary: "开源设备健康监控诊断工具",
+  downloadUrl: "https://gitee.com/hm1997a/cool-monitor/releases/download/v5.3.2/CoolMonitor_v5.3.2_release_20260926_130735.apk",
+  icon: Icons.monitor_heart_outlined,
+  description: "CoolMonitor 安卓设备健康监控诊断工具，实时监测CPU/电池温度、后台耗电应用、WiFi网络风险，支持App权限审计、垃圾营销通知过滤、电池健康评估，内置AI智能分析设备异常并给出优化建议，纯本地数据处理不上传隐私，无广告免费使用",
+);
+
 const komiStoreRecommendation = RecommendedApp(
   name: "Komi Store",
   version: "v1.9.2",
@@ -145,6 +154,7 @@ class AppRecommendationsPage extends StatelessWidget {
       starRingBrowserRecommendation,
       tomatoRecommendation,
       komiStoreRecommendation,
+      coolMonitorRecommendation,
     ];
     return Scaffold(
       appBar: AppBar(title: const Text("应用推荐")),
