@@ -15,11 +15,12 @@ import 'recommendations.dart';
 const String repository = "BaiXiaoTao520/New-ZexNote";
 const String repositoryUrl = "https://github.com/$repository";
 const String githubLatestApkUrl = "$repositoryUrl/releases/latest/download/app-release.apk";
-const String currentVersion = "2.1.6";
+const String currentVersion = "2.2.0";
 const String mirrorResId = String.fromEnvironment("MIRROR_RES_ID");
 const String mirrorApiUrl = "https://mirrorchyan.com/api/resources/$mirrorResId/latest";
 const String mirrorProjectUrl = "https://mirrorchyan.com/zh/projects?rid=$mirrorResId";
 const String contributorsApiUrl = "https://api.github.com/repos/$repository/contributors";
+const String sponsorshipReadmeUrl = "$repositoryUrl/blob/main/README.md";
 
 typedef CheckUpdateCallback = Future<void> Function({VoidCallback? onUpdateFound});
 
@@ -2024,6 +2025,16 @@ class AboutPage extends StatelessWidget {
                 onTap: () => _openRepository(context),
               ),
               ListTile(
+                leading: const Icon(Icons.volunteer_activism_outlined),
+                title: const Text("赞助与支持"),
+                subtitle: const Text("支持作者与后续开发维护"),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => showDialog<void>(
+                  context: context,
+                  builder: (context) => const SponsorshipDialog(),
+                ),
+              ),
+              ListTile(
                 leading: const Icon(Icons.groups_outlined),
                 title: const Text("贡献者鸣谢"),
                 subtitle: const Text("查看参与项目设计与代码贡献的开发者"),
@@ -2047,6 +2058,56 @@ class AboutPage extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class SponsorshipDialog extends StatelessWidget {
+  const SponsorshipDialog({super.key});
+
+  Future<void> _openReadme(BuildContext context) async {
+    final launched = await launchUrl(
+      Uri.parse(sponsorshipReadmeUrl),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!launched && context.mounted) {
+      showAppToast(context, "无法打开浏览器", isError: true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text("赞助与支持"),
+      content: SizedBox(
+        width: double.maxFinite,
+        height: 420,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              Text("1. 无论是否选择赞助，都感谢你点开本页。愿意来了解，本身就是对项目的认可。"),
+              SizedBox(height: 16),
+              Text("2. 独立开发者，无公司、没有服务器经费，做免费开源APP，不强求捐赠，完全自愿，不捆绑任何功能，捐赠不会解锁特殊特权。"),
+              SizedBox(height: 16),
+              Text("3. 如果 ZexNote 帮到了你，可以自愿赞助支持作者。赞助完全自愿，不赞助也能使用全部功能，赞助不会解锁额外特权。"),
+              SizedBox(height: 16),
+              Text("4. 点击下方按钮会打开浏览器，跳转到 GitHub README 介绍中，滑到最下面找到赞赏码并截图保存，打开微信点扫一扫，选择你刚截屏过的内容即可。"),
+              SizedBox(height: 20),
+              Text("如需加入QQ交流群："),
+              SizedBox(height: 8),
+              Text("考虑到群维护精力有限，同时曾遭遇恶意举报干扰，入群需要至少5元的赞助门槛，感谢大家理解与配合。"),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        FilledButton.icon(
+          onPressed: () => _openReadme(context),
+          icon: const Icon(Icons.open_in_browser),
+          label: const Text("跳转至浏览器"),
+        ),
+      ],
     );
   }
 }
