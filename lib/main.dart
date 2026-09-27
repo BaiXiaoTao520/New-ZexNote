@@ -15,7 +15,7 @@ import 'recommendations.dart';
 const String repository = "BaiXiaoTao520/New-ZexNote";
 const String repositoryUrl = "https://github.com/$repository";
 const String githubLatestApkUrl = "$repositoryUrl/releases/latest/download/app-release.apk";
-const String currentVersion = "2.2.2";
+const String currentVersion = "2.2.5";
 const String mirrorResId = String.fromEnvironment("MIRROR_RES_ID");
 const String mirrorApiUrl = "https://mirrorchyan.com/api/resources/$mirrorResId/latest";
 const String mirrorProjectUrl = "https://mirrorchyan.com/zh/projects?rid=$mirrorResId";
@@ -589,27 +589,35 @@ class _MainPageState extends State<MainPage> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
-    final navigationBackground = colorScheme.surfaceContainerHighest.withAlpha(
-      navigationBlurEnabled
-          ? (isDark ? 150 : 138)
-          : 255,
-    );
+    final navigationBackgroundTop = navigationBlurEnabled
+        ? (isDark
+            ? colorScheme.surfaceContainerHighest.withAlpha(118)
+            : Colors.white.withAlpha(168))
+        : colorScheme.surfaceContainerHighest;
+    final navigationBackgroundBottom = navigationBlurEnabled
+        ? (isDark
+            ? colorScheme.surfaceContainer.withAlpha(82)
+            : colorScheme.surfaceContainerHighest.withAlpha(138))
+        : colorScheme.surfaceContainerHighest;
     final navigationBorder = navigationBlurEnabled
         ? (isDark
-            ? Colors.white.withAlpha(48)
-            : colorScheme.outlineVariant.withAlpha(185))
-        : (isDark
-            ? Colors.white.withAlpha(28)
-            : colorScheme.outlineVariant.withAlpha(150));
-    final navigationShadow = navigationBlurEnabled
-        ? (isDark ? Colors.black.withAlpha(120) : Colors.black.withAlpha(48))
-        : (isDark ? Colors.black.withAlpha(100) : Colors.black.withAlpha(35));
-    final selectedNavigationBackground = isDark
-        ? colorScheme.primary.withAlpha(190)
-        : colorScheme.primaryContainer.withAlpha(245);
-    final selectedNavigationForeground = isDark
-        ? colorScheme.onPrimary
-        : colorScheme.onPrimaryContainer;
+            ? Colors.white.withAlpha(72)
+            : Colors.white.withAlpha(210))
+        : colorScheme.outlineVariant;
+    final navigationShadow = isDark
+        ? Colors.black.withAlpha(navigationBlurEnabled ? 155 : 110)
+        : colorScheme.shadow.withAlpha(navigationBlurEnabled ? 72 : 42);
+    final selectedNavigationTop = navigationBlurEnabled
+        ? (isDark
+            ? colorScheme.primaryContainer.withAlpha(168)
+            : colorScheme.primaryContainer.withAlpha(218))
+        : colorScheme.primaryContainer;
+    final selectedNavigationBottom = navigationBlurEnabled
+        ? (isDark
+            ? colorScheme.primary.withAlpha(112)
+            : colorScheme.primary.withAlpha(148))
+        : colorScheme.primaryContainer;
+    final selectedNavigationForeground = colorScheme.onPrimaryContainer;
     final unselectedNavigationForeground = colorScheme.onSurfaceVariant;
     final pageSelectionMode = currentIndex == 0
         ? selectionMode
@@ -664,27 +672,43 @@ class _MainPageState extends State<MainPage> {
             left: 24,
             right: 24,
             bottom: 16,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(34),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(
-                  sigmaX: navigationBlurEnabled ? 26 : 0,
-                  sigmaY: navigationBlurEnabled ? 26 : 0,
-                ),
-                child: Container(
-                  height: 68,
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: navigationBackground,
-                    borderRadius: BorderRadius.circular(34),
-                    border: Border.all(color: navigationBorder),
-                    boxShadow: [
-                      BoxShadow(color: navigationShadow, blurRadius: 22, offset: const Offset(0, 8)),
-                    ],
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(34),
+                boxShadow: [
+                  BoxShadow(
+                    color: navigationShadow,
+                    blurRadius: navigationBlurEnabled ? 30 : 20,
+                    spreadRadius: navigationBlurEnabled ? 2 : 0,
+                    offset: const Offset(0, 10),
                   ),
-                  child: Row(
-                    children: List.generate(4, (index) {
-                      final selected = currentIndex == index;
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(34),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(
+                    sigmaX: navigationBlurEnabled ? 34 : 0,
+                    sigmaY: navigationBlurEnabled ? 34 : 0,
+                  ),
+                  child: Container(
+                    height: 68,
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          navigationBackgroundTop,
+                          navigationBackgroundBottom,
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(34),
+                      border: Border.all(color: navigationBorder, width: 1.2),
+                    ),
+                    child: Row(
+                      children: List.generate(4, (index) {
+                        final selected = currentIndex == index;
                       return Expanded(
                         child: Material(
                           color: Colors.transparent,
@@ -711,10 +735,31 @@ class _MainPageState extends State<MainPage> {
                                     curve: Curves.easeInOut,
                                     alignment: Alignment.center,
                                     decoration: BoxDecoration(
-                                      color: selected
-                                          ? selectedNavigationBackground
-                                          : Colors.transparent,
+                                      gradient: selected
+                                          ? LinearGradient(
+                                              begin: Alignment.topLeft,
+                                              end: Alignment.bottomRight,
+                                              colors: [
+                                                selectedNavigationTop,
+                                                selectedNavigationBottom,
+                                              ],
+                                            )
+                                          : null,
                                       borderRadius: BorderRadius.circular(24),
+                                      border: selected && navigationBlurEnabled
+                                          ? Border.all(
+                                              color: Colors.white.withAlpha(isDark ? 34 : 92),
+                                            )
+                                          : null,
+                                      boxShadow: selected && navigationBlurEnabled
+                                          ? [
+                                              BoxShadow(
+                                                color: colorScheme.primary.withAlpha(isDark ? 45 : 35),
+                                                blurRadius: 14,
+                                                offset: const Offset(0, 5),
+                                              ),
+                                            ]
+                                          : null,
                                     ),
                                     child: Icon(
                                       index == 0
@@ -735,7 +780,8 @@ class _MainPageState extends State<MainPage> {
                           ),
                         ),
                       );
-                    }),
+                      }),
+                    ),
                   ),
                 ),
               ),
