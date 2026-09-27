@@ -2067,6 +2067,113 @@ class CustomColorDialog extends StatefulWidget {
 }
 
 class _CustomColorDialogState extends State<CustomColorDialog> {
+  late double hue;
+  Color? manualColor;
+
+  @override
+  void initState() {
+    super.initState();
+    hue = HSVColor.fromColor(widget.initialColor).hue;
+  }
+
+  Color get selectedColor =>
+      manualColor ?? HSVColor.fromAHSV(1, hue, 0.68, 0.9).toColor();
+
+  Future<void> _openHexColorDialog() async {
+    final color = await showDialog<Color>(
+      context: context,
+      builder: (context) => HexColorDialog(initialColor: selectedColor),
+    );
+    if (color != null && mounted) {
+      setState(() {
+        manualColor = color;
+        hue = HSVColor.fromColor(color).hue;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final previewColor = selectedColor;
+    return AlertDialog(
+      title: const Text("自定义颜色"),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("拖动滑块选择主题颜色"),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: previewColor,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: "输入十六进制颜色",
+                  onPressed: _openHexColorDialog,
+                  icon: const Icon(Icons.edit_outlined),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                trackHeight: 18,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 22),
+                activeTrackColor: previewColor,
+                inactiveTrackColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                thumbColor: previewColor,
+              ),
+              child: Slider(
+                min: 0,
+                max: 360,
+                divisions: 360,
+                value: hue,
+                onChanged: (value) => setState(() {
+                  hue = value;
+                  manualColor = null;
+                }),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("取消"),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, selectedColor),
+          child: const Text("确定"),
+        ),
+      ],
+    );
+  }
+}
+
+class HexColorDialog extends StatefulWidget {
+  final Color initialColor;
+
+  const HexColorDialog({
+    super.key,
+    required this.initialColor,
+  });
+
+  @override
+  State<HexColorDialog> createState() => _HexColorDialogState();
+}
+
+class _HexColorDialogState extends State<HexColorDialog> {
   late final TextEditingController controller;
   String? errorText;
 
@@ -2092,13 +2199,13 @@ class _CustomColorDialogState extends State<CustomColorDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text("自定义颜色"),
+      title: const Text("输入颜色编号"),
       content: TextField(
         controller: controller,
         autofocus: true,
         textCapitalization: TextCapitalization.characters,
         decoration: InputDecoration(
-          labelText: "颜色编号",
+          labelText: "十六进制颜色",
           hintText: "例如 FF69A88D",
           errorText: errorText,
           prefixText: "#",
