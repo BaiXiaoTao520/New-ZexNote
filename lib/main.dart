@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:dynamic_color/dynamic_color.dart';
@@ -16,7 +15,7 @@ import 'recommendations.dart';
 const String repository = "BaiXiaoTao520/New-ZexNote";
 const String repositoryUrl = "https://github.com/$repository";
 const String githubLatestApkUrl = "$repositoryUrl/releases/latest/download/app-release.apk";
-const String currentVersion = "2.3.1";
+const String currentVersion = "2.3.2";
 const String mirrorResId = String.fromEnvironment("MIRROR_RES_ID");
 const String mirrorApiUrl = "https://mirrorchyan.com/api/resources/$mirrorResId/latest";
 const String mirrorProjectUrl = "https://mirrorchyan.com/zh/projects?rid=$mirrorResId";
@@ -27,7 +26,6 @@ typedef CheckUpdateCallback = Future<void> Function({VoidCallback? onUpdateFound
 
 final ValueNotifier<bool> globalDynamicColorNotifier = ValueNotifier(true);
 final ValueNotifier<bool> globalNavigationBlurNotifier = ValueNotifier(true);
-final ValueNotifier<bool> globalMonetBackgroundNotifier = ValueNotifier(false);
 final ValueNotifier<Color> globalThemeSeedNotifier = ValueNotifier(Colors.lightGreen);
 
 void main() async {
@@ -35,127 +33,10 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
   globalDynamicColorNotifier.value = prefs.getBool("dynamicColor") ?? true;
   globalNavigationBlurNotifier.value = prefs.getBool("navigationBlur") ?? true;
-  globalMonetBackgroundNotifier.value = prefs.getBool("monetBackground") ?? false;
   globalThemeSeedNotifier.value = Color(
     prefs.getInt("themeSeedColor") ?? Colors.lightGreen.value,
   );
   runApp(const ZexNoteApp());
-}
-
-class MonetBackground extends StatefulWidget {
-  const MonetBackground({super.key});
-
-  @override
-  State<MonetBackground> createState() => _MonetBackgroundState();
-}
-
-class _MonetBackgroundState extends State<MonetBackground>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController controller;
-
-  @override
-  void initState() {
-    super.initState();
-    controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 18),
-    )..repeat();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<bool>(
-      valueListenable: globalMonetBackgroundNotifier,
-      builder: (context, enabled, _) {
-        final colors = Theme.of(context).colorScheme;
-        if (!enabled) {
-          return SizedBox.expand(child: ColoredBox(color: colors.surface));
-        }
-        return IgnorePointer(
-          child: SizedBox.expand(
-            child: RepaintBoundary(
-              child: AnimatedBuilder(
-                animation: controller,
-                builder: (context, child) {
-                  final phase = controller.value * 2 * math.pi;
-                  return ClipRect(
-                    child: Stack(
-                      children: [
-                        Positioned.fill(child: ColoredBox(color: colors.surface)),
-                        _MonetBlob(
-                          color: colors.primaryContainer,
-                          alignment: Alignment(
-                            -0.7 + math.sin(phase) * 0.18,
-                            -0.6 + math.cos(phase * 0.8) * 0.22,
-                          ),
-                          size: 330,
-                        ),
-                        _MonetBlob(
-                          color: colors.secondaryContainer,
-                          alignment: Alignment(
-                            0.75 + math.cos(phase * 0.7) * 0.2,
-                            -0.1 + math.sin(phase * 0.9) * 0.25,
-                          ),
-                          size: 380,
-                        ),
-                        _MonetBlob(
-                          color: colors.tertiaryContainer,
-                          alignment: Alignment(
-                            -0.1 + math.sin(phase * 0.6) * 0.28,
-                            0.75 + math.cos(phase * 0.75) * 0.18,
-                          ),
-                          size: 420,
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  @override
-  void dispose() {
-    controller.dispose();
-    super.dispose();
-  }
-}
-
-class _MonetBlob extends StatelessWidget {
-  final Color color;
-  final Alignment alignment;
-  final double size;
-
-  const _MonetBlob({
-    required this.color,
-    required this.alignment,
-    required this.size,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: alignment,
-      child: ImageFiltered(
-        imageFilter: ImageFilter.blur(sigmaX: 58, sigmaY: 58),
-        child: Opacity(
-          opacity: 0.22,
-          child: Container(
-            width: size,
-            height: size * 0.72,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(size),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class ZexNoteApp extends StatelessWidget {
@@ -186,9 +67,9 @@ class ZexNoteApp extends StatelessWidget {
                   brightness: Brightness.light,
                   colorScheme: lightScheme,
                   useMaterial3: true,
-                  scaffoldBackgroundColor: Colors.transparent,
-                  appBarTheme: const AppBarTheme(
-                    backgroundColor: Colors.transparent,
+                  scaffoldBackgroundColor: lightScheme.surface,
+                  appBarTheme: AppBarTheme(
+                    backgroundColor: lightScheme.surface,
                     surfaceTintColor: Colors.transparent,
                   ),
                 ),
@@ -196,20 +77,14 @@ class ZexNoteApp extends StatelessWidget {
                   brightness: Brightness.dark,
                   colorScheme: darkScheme,
                   useMaterial3: true,
-                  scaffoldBackgroundColor: Colors.transparent,
-                  appBarTheme: const AppBarTheme(
-                    backgroundColor: Colors.transparent,
+                  scaffoldBackgroundColor: darkScheme.surface,
+                  appBarTheme: AppBarTheme(
+                    backgroundColor: darkScheme.surface,
                     surfaceTintColor: Colors.transparent,
                   ),
                 ),
                 themeMode: ThemeMode.system,
                 home: const MainPage(),
-                builder: (context, child) => Stack(
-                  children: [
-                    const MonetBackground(),
-                    if (child != null) child,
-                  ],
-                ),
                 debugShowCheckedModeBanner: false,
               );
             });
@@ -1897,13 +1772,6 @@ class _ThemeSettingsPageState extends State<ThemeSettingsPage> {
     if (mounted) setState(() => dynamicColorEnabled = value);
   }
 
-  Future<void> _setMonetBackground(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool("monetBackground", value);
-    globalMonetBackgroundNotifier.value = value;
-    if (mounted) showAppToast(context, "已生效");
-  }
-
   Future<void> _openThemeColorDialog() async {
     if (dynamicColorEnabled) return;
     await showDialog<void>(
@@ -1925,16 +1793,6 @@ class _ThemeSettingsPageState extends State<ThemeSettingsPage> {
             subtitle: const Text("跟随系统壁纸配色"),
             value: dynamicColorEnabled,
             onChanged: _setDynamicColor,
-          ),
-          ValueListenableBuilder<bool>(
-            valueListenable: globalMonetBackgroundNotifier,
-            builder: (context, monetEnabled, _) => SwitchListTile(
-              secondary: const Icon(Icons.water_drop_outlined),
-              title: const Text("动态莫奈背景"),
-              subtitle: const Text("柔和色块缓慢晕染流动的背景效果"),
-              value: monetEnabled,
-              onChanged: _setMonetBackground,
-            ),
           ),
           ListTile(
             enabled: !dynamicColorEnabled,
