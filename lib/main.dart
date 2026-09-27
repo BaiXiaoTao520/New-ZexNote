@@ -15,7 +15,7 @@ import 'recommendations.dart';
 const String repository = "BaiXiaoTao520/New-ZexNote";
 const String repositoryUrl = "https://github.com/$repository";
 const String githubLatestApkUrl = "$repositoryUrl/releases/latest/download/app-release.apk";
-const String currentVersion = "2.2.5";
+const String currentVersion = "2.3.0";
 const String mirrorResId = String.fromEnvironment("MIRROR_RES_ID");
 const String mirrorApiUrl = "https://mirrorchyan.com/api/resources/$mirrorResId/latest";
 const String mirrorProjectUrl = "https://mirrorchyan.com/zh/projects?rid=$mirrorResId";
@@ -26,12 +26,16 @@ typedef CheckUpdateCallback = Future<void> Function({VoidCallback? onUpdateFound
 
 final ValueNotifier<bool> globalDynamicColorNotifier = ValueNotifier(true);
 final ValueNotifier<bool> globalNavigationBlurNotifier = ValueNotifier(true);
+final ValueNotifier<Color> globalThemeSeedNotifier = ValueNotifier(Colors.lightGreen);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
   globalDynamicColorNotifier.value = prefs.getBool("dynamicColor") ?? true;
   globalNavigationBlurNotifier.value = prefs.getBool("navigationBlur") ?? true;
+  globalThemeSeedNotifier.value = Color(
+    prefs.getInt("themeSeedColor") ?? Colors.lightGreen.value,
+  );
   runApp(const ZexNoteApp());
 }
 
@@ -43,18 +47,21 @@ class ZexNoteApp extends StatelessWidget {
     return ValueListenableBuilder<bool>(
       valueListenable: globalDynamicColorNotifier,
       builder: (context, useDynamic, _) {
-        return DynamicColorBuilder(builder: (lightDynamic, darkDynamic) {
-          final lightScheme = useDynamic && lightDynamic != null
-              ? lightDynamic
-              : ColorScheme.fromSeed(seedColor: Colors.lightGreen);
-          final darkScheme = useDynamic && darkDynamic != null
-              ? darkDynamic
-              : ColorScheme.fromSeed(
-                  seedColor: Colors.lightGreen,
-                  brightness: Brightness.dark,
-                );
+        return ValueListenableBuilder<Color>(
+          valueListenable: globalThemeSeedNotifier,
+          builder: (context, themeSeed, _) {
+            return DynamicColorBuilder(builder: (lightDynamic, darkDynamic) {
+              final lightScheme = useDynamic && lightDynamic != null
+                  ? lightDynamic
+                  : ColorScheme.fromSeed(seedColor: themeSeed);
+              final darkScheme = useDynamic && darkDynamic != null
+                  ? darkDynamic
+                  : ColorScheme.fromSeed(
+                      seedColor: themeSeed,
+                      brightness: Brightness.dark,
+                    );
 
-          return MaterialApp(
+              return MaterialApp(
             title: "ZexNote",
             theme: ThemeData(
               brightness: Brightness.light,
@@ -68,9 +75,11 @@ class ZexNoteApp extends StatelessWidget {
             ),
             themeMode: ThemeMode.system,
             home: const MainPage(),
-            debugShowCheckedModeBanner: false,
-          );
-        });
+                debugShowCheckedModeBanner: false,
+              );
+            });
+          },
+        );
       },
     );
   }
@@ -591,13 +600,13 @@ class _MainPageState extends State<MainPage> {
     final isDark = theme.brightness == Brightness.dark;
     final navigationBackgroundTop = navigationBlurEnabled
         ? (isDark
-            ? colorScheme.surfaceContainerHighest.withAlpha(118)
-            : Colors.white.withAlpha(168))
+            ? colorScheme.surfaceContainerHighest.withAlpha(78)
+            : Colors.white.withAlpha(116))
         : colorScheme.surfaceContainerHighest;
     final navigationBackgroundBottom = navigationBlurEnabled
         ? (isDark
-            ? colorScheme.surfaceContainer.withAlpha(82)
-            : colorScheme.surfaceContainerHighest.withAlpha(138))
+            ? colorScheme.surfaceContainer.withAlpha(48)
+            : colorScheme.surfaceContainerHighest.withAlpha(92))
         : colorScheme.surfaceContainerHighest;
     final navigationBorder = navigationBlurEnabled
         ? (isDark
@@ -609,13 +618,13 @@ class _MainPageState extends State<MainPage> {
         : colorScheme.shadow.withAlpha(navigationBlurEnabled ? 72 : 42);
     final selectedNavigationTop = navigationBlurEnabled
         ? (isDark
-            ? colorScheme.primaryContainer.withAlpha(168)
-            : colorScheme.primaryContainer.withAlpha(218))
+            ? colorScheme.primaryContainer.withAlpha(118)
+            : colorScheme.primaryContainer.withAlpha(168))
         : colorScheme.primaryContainer;
     final selectedNavigationBottom = navigationBlurEnabled
         ? (isDark
-            ? colorScheme.primary.withAlpha(112)
-            : colorScheme.primary.withAlpha(148))
+            ? colorScheme.primary.withAlpha(78)
+            : colorScheme.primary.withAlpha(112))
         : colorScheme.primaryContainer;
     final selectedNavigationForeground = colorScheme.onPrimaryContainer;
     final unselectedNavigationForeground = colorScheme.onSurfaceVariant;
@@ -688,9 +697,10 @@ class _MainPageState extends State<MainPage> {
                 borderRadius: BorderRadius.circular(34),
                 child: BackdropFilter(
                   filter: ImageFilter.blur(
-                    sigmaX: navigationBlurEnabled ? 34 : 0,
-                    sigmaY: navigationBlurEnabled ? 34 : 0,
+                    sigmaX: navigationBlurEnabled ? 52 : 0,
+                    sigmaY: navigationBlurEnabled ? 52 : 0,
                   ),
+                  blendMode: BlendMode.srcOver,
                   child: Container(
                     height: 68,
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -1665,18 +1675,14 @@ class SettingPage extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.only(bottom: 160),
         children: [
-          ValueListenableBuilder<bool>(
-            valueListenable: globalDynamicColorNotifier,
-            builder: (context, isDynamic, _) => SwitchListTile(
-              secondary: const Icon(Icons.palette),
-              title: const Text("动态颜色（Material You）"),
-              subtitle: const Text("跟随系统壁纸配色"),
-              value: isDynamic,
-              onChanged: (value) async {
-                final prefs = await SharedPreferences.getInstance();
-                await prefs.setBool("dynamicColor", value);
-                globalDynamicColorNotifier.value = value;
-              },
+          ListTile(
+            leading: const Icon(Icons.palette_outlined),
+            title: const Text("主题设置"),
+            subtitle: const Text("动态颜色与主题颜色自定义"),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const ThemeSettingsPage()),
             ),
           ),
           ValueListenableBuilder<bool>(
@@ -1729,6 +1735,147 @@ class SettingPage extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class ThemeSettingsPage extends StatefulWidget {
+  const ThemeSettingsPage({super.key});
+
+  @override
+  State<ThemeSettingsPage> createState() => _ThemeSettingsPageState();
+}
+
+class _ThemeSettingsPageState extends State<ThemeSettingsPage> {
+  bool dynamicColorEnabled = true;
+
+  @override
+  void initState() {
+    super.initState();
+    dynamicColorEnabled = globalDynamicColorNotifier.value;
+  }
+
+  Future<void> _setDynamicColor(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool("dynamicColor", value);
+    globalDynamicColorNotifier.value = value;
+    if (mounted) setState(() => dynamicColorEnabled = value);
+  }
+
+  Future<void> _openThemeColorDialog() async {
+    if (dynamicColorEnabled) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => const ThemeColorDialog(),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("主题设置")),
+      body: ListView(
+        padding: const EdgeInsets.only(bottom: 160),
+        children: [
+          SwitchListTile(
+            secondary: const Icon(Icons.auto_awesome),
+            title: const Text("动态颜色（Material You）"),
+            subtitle: const Text("跟随系统壁纸配色"),
+            value: dynamicColorEnabled,
+            onChanged: _setDynamicColor,
+          ),
+          ListTile(
+            enabled: !dynamicColorEnabled,
+            leading: const Icon(Icons.color_lens_outlined),
+            title: const Text("主题颜色自定义（Beta）"),
+            subtitle: Text(
+              dynamicColorEnabled
+                  ? "你已开启动态颜色，该功能不可用"
+                  : "选择应用的主题配色风格",
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: dynamicColorEnabled ? null : _openThemeColorDialog,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class ThemePreset {
+  final String name;
+  final Color color;
+
+  const ThemePreset(this.name, this.color);
+}
+
+class ThemeColorDialog extends StatefulWidget {
+  const ThemeColorDialog({super.key});
+
+  @override
+  State<ThemeColorDialog> createState() => _ThemeColorDialogState();
+}
+
+class _ThemeColorDialogState extends State<ThemeColorDialog> {
+  static const presets = [
+    ThemePreset("薄荷绿", Color(0xFF69A88D)),
+    ThemePreset("海洋蓝", Color(0xFF5577B8)),
+    ThemePreset("薰衣草", Color(0xFF8B78B8)),
+    ThemePreset("暖阳橙", Color(0xFFC47D4D)),
+    ThemePreset("樱粉色", Color(0xFFB86F82)),
+  ];
+
+  late Color selectedColor;
+
+  @override
+  void initState() {
+    super.initState();
+    selectedColor = globalThemeSeedNotifier.value;
+  }
+
+  Future<void> _confirm() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt("themeSeedColor", selectedColor.value);
+    globalThemeSeedNotifier.value = selectedColor;
+    if (mounted) Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text("主题颜色自定义（Beta）"),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              for (final preset in presets)
+                RadioListTile<Color>(
+                  value: preset.color,
+                  groupValue: selectedColor,
+                  onChanged: (value) {
+                    if (value != null) setState(() => selectedColor = value);
+                  },
+                  title: Text(preset.name),
+                  secondary: CircleAvatar(
+                    backgroundColor: preset.color,
+                    radius: 16,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("取消"),
+        ),
+        FilledButton(
+          onPressed: _confirm,
+          child: const Text("确定"),
+        ),
+      ],
     );
   }
 }
