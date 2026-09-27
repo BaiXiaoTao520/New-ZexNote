@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:dynamic_color/dynamic_color.dart';
@@ -15,7 +16,7 @@ import 'recommendations.dart';
 const String repository = "BaiXiaoTao520/New-ZexNote";
 const String repositoryUrl = "https://github.com/$repository";
 const String githubLatestApkUrl = "$repositoryUrl/releases/latest/download/app-release.apk";
-const String currentVersion = "2.3.0";
+const String currentVersion = "2.3.1";
 const String mirrorResId = String.fromEnvironment("MIRROR_RES_ID");
 const String mirrorApiUrl = "https://mirrorchyan.com/api/resources/$mirrorResId/latest";
 const String mirrorProjectUrl = "https://mirrorchyan.com/zh/projects?rid=$mirrorResId";
@@ -26,6 +27,7 @@ typedef CheckUpdateCallback = Future<void> Function({VoidCallback? onUpdateFound
 
 final ValueNotifier<bool> globalDynamicColorNotifier = ValueNotifier(true);
 final ValueNotifier<bool> globalNavigationBlurNotifier = ValueNotifier(true);
+final ValueNotifier<bool> globalMonetBackgroundNotifier = ValueNotifier(false);
 final ValueNotifier<Color> globalThemeSeedNotifier = ValueNotifier(Colors.lightGreen);
 
 void main() async {
@@ -33,10 +35,127 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
   globalDynamicColorNotifier.value = prefs.getBool("dynamicColor") ?? true;
   globalNavigationBlurNotifier.value = prefs.getBool("navigationBlur") ?? true;
+  globalMonetBackgroundNotifier.value = prefs.getBool("monetBackground") ?? false;
   globalThemeSeedNotifier.value = Color(
     prefs.getInt("themeSeedColor") ?? Colors.lightGreen.value,
   );
   runApp(const ZexNoteApp());
+}
+
+class MonetBackground extends StatefulWidget {
+  const MonetBackground({super.key});
+
+  @override
+  State<MonetBackground> createState() => _MonetBackgroundState();
+}
+
+class _MonetBackgroundState extends State<MonetBackground>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController controller;
+
+  @override
+  void initState() {
+    super.initState();
+    controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 18),
+    )..repeat();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: globalMonetBackgroundNotifier,
+      builder: (context, enabled, _) {
+        final colors = Theme.of(context).colorScheme;
+        if (!enabled) {
+          return SizedBox.expand(child: ColoredBox(color: colors.surface));
+        }
+        return IgnorePointer(
+          child: SizedBox.expand(
+            child: RepaintBoundary(
+              child: AnimatedBuilder(
+                animation: controller,
+                builder: (context, child) {
+                  final phase = controller.value * 2 * math.pi;
+                  return ClipRect(
+                    child: Stack(
+                      children: [
+                        Positioned.fill(child: ColoredBox(color: colors.surface)),
+                        _MonetBlob(
+                          color: colors.primaryContainer,
+                          alignment: Alignment(
+                            -0.7 + math.sin(phase) * 0.18,
+                            -0.6 + math.cos(phase * 0.8) * 0.22,
+                          ),
+                          size: 330,
+                        ),
+                        _MonetBlob(
+                          color: colors.secondaryContainer,
+                          alignment: Alignment(
+                            0.75 + math.cos(phase * 0.7) * 0.2,
+                            -0.1 + math.sin(phase * 0.9) * 0.25,
+                          ),
+                          size: 380,
+                        ),
+                        _MonetBlob(
+                          color: colors.tertiaryContainer,
+                          alignment: Alignment(
+                            -0.1 + math.sin(phase * 0.6) * 0.28,
+                            0.75 + math.cos(phase * 0.75) * 0.18,
+                          ),
+                          size: 420,
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+}
+
+class _MonetBlob extends StatelessWidget {
+  final Color color;
+  final Alignment alignment;
+  final double size;
+
+  const _MonetBlob({
+    required this.color,
+    required this.alignment,
+    required this.size,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: alignment,
+      child: ImageFiltered(
+        imageFilter: ImageFilter.blur(sigmaX: 58, sigmaY: 58),
+        child: Opacity(
+          opacity: 0.22,
+          child: Container(
+            width: size,
+            height: size * 0.72,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(size),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class ZexNoteApp extends StatelessWidget {
@@ -62,19 +181,35 @@ class ZexNoteApp extends StatelessWidget {
                     );
 
               return MaterialApp(
-            title: "ZexNote",
-            theme: ThemeData(
-              brightness: Brightness.light,
-              colorScheme: lightScheme,
-              useMaterial3: true,
-            ),
-            darkTheme: ThemeData(
-              brightness: Brightness.dark,
-              colorScheme: darkScheme,
-              useMaterial3: true,
-            ),
-            themeMode: ThemeMode.system,
-            home: const MainPage(),
+                title: "ZexNote",
+                theme: ThemeData(
+                  brightness: Brightness.light,
+                  colorScheme: lightScheme,
+                  useMaterial3: true,
+                  scaffoldBackgroundColor: Colors.transparent,
+                  appBarTheme: const AppBarTheme(
+                    backgroundColor: Colors.transparent,
+                    surfaceTintColor: Colors.transparent,
+                  ),
+                ),
+                darkTheme: ThemeData(
+                  brightness: Brightness.dark,
+                  colorScheme: darkScheme,
+                  useMaterial3: true,
+                  scaffoldBackgroundColor: Colors.transparent,
+                  appBarTheme: const AppBarTheme(
+                    backgroundColor: Colors.transparent,
+                    surfaceTintColor: Colors.transparent,
+                  ),
+                ),
+                themeMode: ThemeMode.system,
+                home: const MainPage(),
+                builder: (context, child) => Stack(
+                  children: [
+                    const MonetBackground(),
+                    if (child != null) child,
+                  ],
+                ),
                 debugShowCheckedModeBanner: false,
               );
             });
@@ -1762,6 +1897,13 @@ class _ThemeSettingsPageState extends State<ThemeSettingsPage> {
     if (mounted) setState(() => dynamicColorEnabled = value);
   }
 
+  Future<void> _setMonetBackground(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool("monetBackground", value);
+    globalMonetBackgroundNotifier.value = value;
+    if (mounted) showAppToast(context, "已生效");
+  }
+
   Future<void> _openThemeColorDialog() async {
     if (dynamicColorEnabled) return;
     await showDialog<void>(
@@ -1783,6 +1925,16 @@ class _ThemeSettingsPageState extends State<ThemeSettingsPage> {
             subtitle: const Text("跟随系统壁纸配色"),
             value: dynamicColorEnabled,
             onChanged: _setDynamicColor,
+          ),
+          ValueListenableBuilder<bool>(
+            valueListenable: globalMonetBackgroundNotifier,
+            builder: (context, monetEnabled, _) => SwitchListTile(
+              secondary: const Icon(Icons.water_drop_outlined),
+              title: const Text("动态莫奈背景"),
+              subtitle: const Text("柔和色块缓慢晕染流动的背景效果"),
+              value: monetEnabled,
+              onChanged: _setMonetBackground,
+            ),
           ),
           ListTile(
             enabled: !dynamicColorEnabled,
@@ -1833,6 +1985,16 @@ class _ThemeColorDialogState extends State<ThemeColorDialog> {
     selectedColor = globalThemeSeedNotifier.value;
   }
 
+  Future<void> _openCustomColorDialog() async {
+    final color = await showDialog<Color>(
+      context: context,
+      builder: (context) => CustomColorDialog(initialColor: selectedColor),
+    );
+    if (color != null && mounted) {
+      setState(() => selectedColor = color);
+    }
+  }
+
   Future<void> _confirm() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt("themeSeedColor", selectedColor.value);
@@ -1862,6 +2024,18 @@ class _ThemeColorDialogState extends State<ThemeColorDialog> {
                     radius: 16,
                   ),
                 ),
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text("自定义"),
+                subtitle: Text(
+                  "#${selectedColor.value.toRadixString(16).substring(2).toUpperCase()}",
+                ),
+                trailing: CircleAvatar(
+                  backgroundColor: selectedColor,
+                  radius: 16,
+                ),
+                onTap: _openCustomColorDialog,
+              ),
             ],
           ),
         ),
@@ -1877,6 +2051,76 @@ class _ThemeColorDialogState extends State<ThemeColorDialog> {
         ),
       ],
     );
+  }
+}
+
+class CustomColorDialog extends StatefulWidget {
+  final Color initialColor;
+
+  const CustomColorDialog({
+    super.key,
+    required this.initialColor,
+  });
+
+  @override
+  State<CustomColorDialog> createState() => _CustomColorDialogState();
+}
+
+class _CustomColorDialogState extends State<CustomColorDialog> {
+  late final TextEditingController controller;
+  String? errorText;
+
+  @override
+  void initState() {
+    super.initState();
+    controller = TextEditingController(
+      text: widget.initialColor.value.toRadixString(16).substring(2).toUpperCase(),
+    );
+  }
+
+  void _confirm() {
+    var value = controller.text.trim().replaceFirst("#", "").toUpperCase();
+    if (value.length == 6) value = "FF$value";
+    final parsed = int.tryParse(value, radix: 16);
+    if (parsed == null || value.length != 8) {
+      setState(() => errorText = "请输入 6 位或 8 位十六进制颜色值");
+      return;
+    }
+    Navigator.pop(context, Color(parsed));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text("自定义颜色"),
+      content: TextField(
+        controller: controller,
+        autofocus: true,
+        textCapitalization: TextCapitalization.characters,
+        decoration: InputDecoration(
+          labelText: "颜色编号",
+          hintText: "例如 FF69A88D",
+          errorText: errorText,
+          prefixText: "#",
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("取消"),
+        ),
+        FilledButton(
+          onPressed: _confirm,
+          child: const Text("确定"),
+        ),
+      ],
+    );
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
   }
 }
 
