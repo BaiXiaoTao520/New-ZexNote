@@ -15,7 +15,7 @@ import 'recommendations.dart';
 const String repository = "BaiXiaoTao520/New-ZexNote";
 const String repositoryUrl = "https://github.com/$repository";
 const String githubLatestApkUrl = "$repositoryUrl/releases/latest/download/app-release.apk";
-const String currentVersion = "2.2.1";
+const String currentVersion = "2.2.2";
 const String mirrorResId = String.fromEnvironment("MIRROR_RES_ID");
 const String mirrorApiUrl = "https://mirrorchyan.com/api/resources/$mirrorResId/latest";
 const String mirrorProjectUrl = "https://mirrorchyan.com/zh/projects?rid=$mirrorResId";
@@ -2082,11 +2082,9 @@ class SponsorshipDialog extends StatelessWidget {
             children: [
               Text("1. 无论是否选择赞助，都感谢你点开本页。愿意来了解，本身就是对项目的认可。"),
               SizedBox(height: 16),
-              Text("2. 独立开发者，无公司、没有服务器经费，做免费开源APP，不强求捐赠，完全自愿，不捆绑任何功能，捐赠不会解锁特殊特权。"),
+              Text("2. 如果 ZexNote 帮到了你，可以自愿赞助支持作者。赞助完全自愿，不赞助也能使用全部功能，赞助不会解锁额外特权。"),
               SizedBox(height: 16),
-              Text("3. 如果 ZexNote 帮到了你，可以自愿赞助支持作者。赞助完全自愿，不赞助也能使用全部功能，赞助不会解锁额外特权。"),
-              SizedBox(height: 16),
-              Text("4. 点击下方按钮会打开浏览器，跳转到 GitHub README 介绍中，滑到最下面找到赞赏码并截图保存，打开微信点扫一扫，选择你刚截屏过的内容即可。"),
+              Text("3. 点击下方按钮会打开浏览器，跳转到 GitHub README 介绍中，滑到最下面找到赞赏码并截图保存，打开微信点扫一扫，选择你刚截屏过的内容即可。"),
               SizedBox(height: 20),
               Text("如需加入QQ交流群："),
               SizedBox(height: 8),
