@@ -40,27 +40,36 @@ Future<void> openStoragePermissionSettings() async {
 Future<bool> ensureStoragePermission(BuildContext context) async {
   if (await hasStoragePermission()) return true;
   if (!context.mounted) return false;
-  final shouldOpenSettings = await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text("需要存储权限"),
-          content: const Text("为了将下载文件保存到 /storage/emulated/0/Download，请允许 ZexNote 访问外部存储。"),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text("稍后"),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text("去开启"),
-            ),
-          ],
-        ),
-      ) ??
-      false;
-  if (!shouldOpenSettings) return false;
+
   await openStoragePermissionSettings();
-  return false;
+  if (!context.mounted) return false;
+
+  while (true) {
+    final shouldRecheck = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text("需要存储权限"),
+            content: const Text(
+              "请先在系统设置中允许 ZexNote 访问外部存储，完成后点击“重新检测”继续下载。",
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text("取消"),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text("重新检测"),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!shouldRecheck) return false;
+    if (await hasStoragePermission()) return true;
+    if (!context.mounted) return false;
+  }
 }
 
 void showAppToast(BuildContext context, String message, {bool isError = false}) {
