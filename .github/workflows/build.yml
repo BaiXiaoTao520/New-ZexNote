@@ -40,12 +40,16 @@ jobs:
 
       - name: 对APK进行签名
         run: |
+          INPUT_APK=android/app/build/outputs/apk/release/app-release-unsigned.apk
+          OUTPUT_APK=android/app/build/outputs/apk/release/app-release.apk
+          test -s "$INPUT_APK"
           apksigner sign \
             --ks zexnote-key.jks \
             --ks-pass pass:${{ secrets.KEYSTORE_PASSWORD }} \
             --key-pass pass:${{ secrets.KEY_PASSWORD }} \
             --ks-key-alias ${{ secrets.KEY_ALIAS }} \
-            android/app/build/outputs/apk/release/app-release.apk
+            --out "$OUTPUT_APK" \
+            "$INPUT_APK"
 
       - name: 校验APK签名
         run: apksigner verify android/app/build/outputs/apk/release/app-release.apk
