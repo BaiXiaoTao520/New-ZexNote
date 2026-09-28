@@ -169,11 +169,8 @@ private class AppState(private val services: AppServices) {
 fun ZexNoteApp(services: AppServices) {
     val state = remember { AppState(services) }
     val nav = rememberNavController()
-    val context = LocalContext.current
-    val light = if (state.dynamicColor && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) androidx.compose.material3.dynamicLightColorScheme(context) else androidx.compose.material3.lightColorScheme(primary = state.themeSeed)
-    val dark = if (state.dynamicColor && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) androidx.compose.material3.dynamicDarkColorScheme(context) else androidx.compose.material3.darkColorScheme(primary = state.themeSeed)
     var startupCheck by remember { mutableStateOf(services.getBoolean("autoCheckUpdate", true)) }
-    ZexTheme(light, dark) {
+    ZexTheme(state.dynamicColor, state.themeSeed) {
         Surface(color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxSize()) {
                 if (state.monetBackground) MonetBackground(state.themeSeed)
@@ -195,7 +192,10 @@ fun ZexNoteApp(services: AppServices) {
 }
 
 @Composable
-private fun ZexTheme(light: androidx.compose.material3.ColorScheme, dark: androidx.compose.material3.ColorScheme, content: @Composable () -> Unit) {
+private fun ZexTheme(dynamicColor: Boolean, themeSeed: Color, content: @Composable () -> Unit) {
+    val context = LocalContext.current
+    val light = if (dynamicColor && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) androidx.compose.material3.dynamicLightColorScheme(context) else androidx.compose.material3.lightColorScheme(primary = themeSeed)
+    val dark = if (dynamicColor && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) androidx.compose.material3.dynamicDarkColorScheme(context) else androidx.compose.material3.darkColorScheme(primary = themeSeed)
     androidx.compose.material3.MaterialTheme(colorScheme = if (androidx.compose.foundation.isSystemInDarkTheme()) dark else light, typography = androidx.compose.material3.Typography(), content = content)
 }
 
@@ -203,10 +203,12 @@ private fun ZexTheme(light: androidx.compose.material3.ColorScheme, dark: androi
 private fun MonetBackground(seed: Color) {
     val transition = rememberInfiniteTransition(label = "monet-background")
     val phase by transition.animateFloat(0f, 1f, infiniteRepeatable(tween(18000), RepeatMode.Reverse), label = "monet-phase")
+    val secondary = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.12f)
+    val tertiary = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.1f)
     Canvas(Modifier.fillMaxSize()) {
         drawCircle(seed.copy(alpha = 0.14f), size.minDimension * 0.42f, Offset(size.width * (0.2f + phase * 0.35f), size.height * 0.22f))
-        drawCircle(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.12f), size.minDimension * 0.48f, Offset(size.width * (0.82f - phase * 0.3f), size.height * 0.5f))
-        drawCircle(MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.1f), size.minDimension * 0.5f, Offset(size.width * 0.35f, size.height * (0.82f - phase * 0.2f)))
+        drawCircle(secondary, size.minDimension * 0.48f, Offset(size.width * (0.82f - phase * 0.3f), size.height * 0.5f))
+        drawCircle(tertiary, size.minDimension * 0.5f, Offset(size.width * 0.35f, size.height * (0.82f - phase * 0.2f)))
     }
 }
 
