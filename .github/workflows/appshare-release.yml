@@ -79,12 +79,10 @@ jobs:
         id: version
         shell: bash
         run: |
-          VERSION_FIELD=$(awk '$1 == "version:" {print $2; exit}' pubspec.yaml)
-          VERSION_NAME=${VERSION_FIELD%%+*}
-          VERSION_CODE=${VERSION_FIELD#*+}
-          if [ "$VERSION_CODE" = "$VERSION_FIELD" ]; then
-            VERSION_CODE=1
-          fi
+          VERSION_NAME=$(sed -n 's/.*versionName "\\([^"]*\\)".*/\\1/p' android/app/build.gradle | head -1)
+          VERSION_CODE=$(sed -n 's/.*versionCode \\([0-9]*\\).*/\\1/p' android/app/build.gradle | head -1)
+          test -n "$VERSION_NAME"
+          test -n "$VERSION_CODE"
           echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
           echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
           echo "检测到版本 $VERSION_NAME+$VERSION_CODE"
