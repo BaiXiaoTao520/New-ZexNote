@@ -1,12 +1,8 @@
 name: 构建ZexNote Release ARM64，自动签名，发布GitHub Release
-
 on:
   workflow_dispatch:
   push:
     branches: [ main ]
-
-permissions:
-  contents: write
 
 jobs:
   build:
@@ -21,18 +17,322 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 配置Gradle
-        uses: gradle/actions/setup-gradle@v6
+      - name: 配置Flutter SDK
+        uses: subosito/flutter-action@v2
         with:
-          gradle-version: '8.11.1'
+          flutter-version: '3.24.0'
 
-      - name: 静态检查与单元测试
-        run: gradle -p android --no-daemon lintDebug testDebug
+      - name: 打印Flutter版本
+        run: flutter --version
+
+      - name: 严格锁定dynamic_color版本
+        run: |
+          sed -i 's/dynamic_color: .*/dynamic_color: 1.6.8/' pubspec.yaml
+          cat pubspec.yaml | grep dynamic_color
+
+      - name: 获取项目依赖
+        run: flutter pub get
+
+      - name: 自动生成完整Android V2工程
+        run: |
+          flutter create --platforms=android --project-name zexnote --org com.zex .
+          echo "✅ 已自动生成标准V2 Android工程"
+
+      - name: 生成Flutter官方标准Gradle配置
+        run: |
+          cat > android/settings.gradle << 'SETTINGS_GRADLE_EOF'
+          pluginManagement {
+              def flutterSdkPath = {
+                  def properties = new Properties()
+                  file("local.properties").withInputStream { properties.load(it) }
+                  def flutterSdkPath = properties.getProperty("flutter.sdk")
+                  assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
+                  return flutterSdkPath
+              }()
+              includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          plugins {
+              id "dev.flutter.flutter-plugin-loader" version "1.0.0"
+              id "com.android.application" version "8.4.0" apply false
+              id "org.jetbrains.kotlin.android" version "1.9.24" apply false
+          }
+          include ":app"
+          SETTINGS_GRADLE_EOF
+
+          cat > android/build.gradle << 'ROOT_GRADLE_EOF'
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.buildDir = '../build'
+          subprojects {
+              project.buildDir = "${rootProject.buildDir}/${project.name}"
+          }
+          subprojects {
+              project.evaluationDependsOn(':app')
+          }
+          tasks.register("clean", Delete) {
+              delete rootProject.buildDir
+          }
+          ROOT_GRADLE_EOF
+
+          cat > android/app/build.gradle << 'APP_GRADLE_EOF'
+          plugins {
+              id "com.android.application"
+              id "kotlin-android"
+              id "dev.flutter.flutter-gradle-plugin"
+          }
+          def localProperties = new Properties()
+          def localPropertiesFile = rootProject.file('local.properties')
+          if (localPropertiesFile.exists()) {
+              localPropertiesFile.withReader('UTF-8') { reader ->
+                  localProperties.load(reader)
+              }
+          }
+          def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '22'
+          def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '2.3.2'
+          android {
+              namespace "com.zex.note"
+              compileSdk 36
+              defaultConfig {
+                  applicationId "com.zex.note"
+                  minSdk 28
+                  targetSdk 36
+                  versionCode flutterVersionCode.toInteger()
+                  versionName flutterVersionName
+                  ndk {
+                      abiFilters 'arm64-v8a'
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_1_8
+                  targetCompatibility JavaVersion.VERSION_1_8
+              }
+              kotlinOptions {
+                  jvmTarget = '1.8'
+              }
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.debug
+                  }
+              }
+          }
+          flutter {
+              source '../..'
+          }
+          APP_GRADLE_EOF
+
+          mkdir -p android/gradle/wrapper
+          cat > android/gradle/wrapper/gradle-wrapper.properties << 'WRAPPER_EOF'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.6-bin.zip
+          WRAPPER_EOF
+          echo "✅ 已生成Flutter官方标准Gradle配置"
+
+      - name: 配置应用内APK安装通道
+        run: |
+          mkdir -p android/app/src/main/res/xml
+          cat > android/app/src/main/res/xml/file_paths.xml << 'FILE_PATHS_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <paths xmlns:android="http://schemas.android.com/apk/res/android">
+              <files-path name="app_files" path="." />
+              <cache-path name="app_cache" path="." />
+              <external-files-path name="external_files" path="." />
+              <external-path name="external_storage" path="." />
+          </paths>
+          FILE_PATHS_EOF
+          cat > android/app/src/main/kotlin/com/zex/note/MainActivity.kt << 'MAIN_ACTIVITY_EOF'
+          package com.zex.note
+
+          import android.Manifest
+          import android.content.ClipData
+          import android.content.Intent
+          import android.content.pm.PackageManager
+          import android.net.Uri
+          import android.os.Build
+          import android.os.Environment
+          import android.provider.Settings
+          import androidx.core.content.FileProvider
+          import io.flutter.embedding.android.FlutterActivity
+          import io.flutter.embedding.engine.FlutterEngine
+          import io.flutter.plugin.common.MethodChannel
+          import java.io.File
+
+          class MainActivity : FlutterActivity() {
+              private val channelName = "com.zex.note/installer"
+              private val createTextFileRequestCode = 1001
+              private var pendingTextResult: MethodChannel.Result? = null
+              private var pendingTextContent: String? = null
+
+              override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+                  super.configureFlutterEngine(flutterEngine)
+                  MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
+                      .setMethodCallHandler { call, result ->
+                          when (call.method) {
+                              "canInstallPackages" -> result.success(Build.VERSION.SDK_INT < Build.VERSION_CODES.O || packageManager.canRequestPackageInstalls())
+                              "openInstallSettings" -> {
+                                  startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
+                                  result.success(null)
+                              }
+                              "hasStoragePermission" -> {
+                                  val granted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                      Environment.isExternalStorageManager()
+                                  } else {
+                                      checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+                                  }
+                                  result.success(granted)
+                              }
+                              "openStoragePermissionSettings" -> {
+                                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                      startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:$packageName")))
+                                  } else {
+                                      requestPermissions(arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), 2002)
+                                  }
+                                  result.success(null)
+                              }
+                              "saveTextFile" -> {
+                                  val filename = call.argument<String>("filename") ?: "便签.txt"
+                                  pendingTextResult = result
+                                  pendingTextContent = call.argument<String>("content") ?: ""
+                                  val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                                      addCategory(Intent.CATEGORY_OPENABLE)
+                                      type = "text/plain"
+                                      putExtra(Intent.EXTRA_TITLE, filename)
+                                  }
+                                  startActivityForResult(intent, createTextFileRequestCode)
+                              }
+                              "verifyApkSignature" -> {
+                                  val path = call.argument<String>("path")
+                                  result.success(path != null && hasSameApkSignature(File(path)))
+                              }
+                              "installApk" -> {
+                                  val path = call.argument<String>("path")
+                                  if (path == null) {
+                                      result.error("MISSING_PATH", "APK path is missing", null)
+                                      return@setMethodCallHandler
+                                  }
+                                  val apkUri = FileProvider.getUriForFile(this, "$packageName.fileprovider", File(path))
+                                  startActivity(Intent(Intent.ACTION_VIEW).apply {
+                                      setDataAndType(apkUri, "application/vnd.android.package-archive")
+                                      addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                      addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                      clipData = ClipData.newRawUri("APK", apkUri)
+                                  })
+                                  result.success(null)
+                              }
+                              else -> result.notImplemented()
+                          }
+                      }
+              }
+
+              @Suppress("DEPRECATION")
+              private fun hasSameApkSignature(apkFile: File): Boolean {
+                  if (!apkFile.isFile) return false
+                  val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                      PackageManager.GET_SIGNING_CERTIFICATES
+                  } else {
+                      PackageManager.GET_SIGNATURES
+                  }
+                  val downloadedInfo = packageManager.getPackageArchiveInfo(apkFile.path, flags) ?: return false
+                  val installedInfo = packageManager.getPackageInfo(packageName, flags)
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                      val downloadedSigners = downloadedInfo.signingInfo?.apkContentsSigners
+                          ?.map { it.toCharsString() }
+                          ?.toSet()
+                          ?: return false
+                      val installedSigners = installedInfo.signingInfo?.apkContentsSigners
+                          ?.map { it.toCharsString() }
+                          ?.toSet()
+                          ?: return false
+                      return downloadedSigners == installedSigners
+                  }
+
+                  val downloadedSigners = downloadedInfo.signatures?.map { it.toCharsString() }?.toSet()
+                  val installedSigners = installedInfo.signatures?.map { it.toCharsString() }?.toSet()
+                  return downloadedSigners != null && downloadedSigners == installedSigners
+              }
+
+              override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+                  super.onActivityResult(requestCode, resultCode, data)
+                  if (requestCode != createTextFileRequestCode) return
+
+                  val result = pendingTextResult
+                  val content = pendingTextContent
+                  pendingTextResult = null
+                  pendingTextContent = null
+                  if (result == null || resultCode != RESULT_OK || data?.data == null || content == null) {
+                      result?.success(false)
+                      return
+                  }
+
+                  try {
+                      val output = contentResolver.openOutputStream(data.data!!)
+                      if (output == null) {
+                          result.success(false)
+                          return
+                      }
+                      output.use { it.write(content.toByteArray(Charsets.UTF_8)) }
+                      result.success(true)
+                  } catch (_: Exception) {
+                      result.success(false)
+                  }
+              }
+          }
+          MAIN_ACTIVITY_EOF
+          sed -i '/<activity/i \
+              <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true">\n                  <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />\n              </provider>' android/app/src/main/AndroidManifest.xml
+
+      - name: 自动添加权限到AndroidManifest.xml
+        run: |
+          sed -i '/<application/i \
+              <uses-permission android:name="android.permission.INTERNET" />\n\
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n\
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />\n\
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />\n\
+              <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n\
+              <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />\n\
+              <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />' android/app/src/main/AndroidManifest.xml
+          echo "✅ 已自动添加所需权限"
+
+      - name: 删除自动生成的模板测试文件
+        run: rm -f test/widget_test.dart
+
+      - name: 修复安卓图标背景色资源缺失
+        run: |
+          mkdir -p android/app/src/main/res/values
+          cat > android/app/src/main/res/values/colors.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="ic_launcher_background">#FFFFFF</color>
+          </resources>
+          EOF
+          echo "✅ 已补充 colors.xml"
+
+      - name: Dart语法检查
+        run: flutter analyze
+
+      - name: 读取版本号
+        id: get_version
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | head -1 | awk '{print $2}' | cut -d+ -f1)
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
       - name: 编译Release APK（仅arm64）
-        run: gradle -p android --no-daemon clean assembleRelease
+        env:
+          MIRROR_RES_ID: ${{ secrets.MIRROR_RES_ID }}
+        run: flutter build apk --release --target-platform android-arm64 --dart-define=MIRROR_RES_ID="$MIRROR_RES_ID"
 
-      - name: 准备系统环境工具（安装apksigner）
+      - name: 准备系统环境工具 (安装 apksigner)
         run: sudo apt-get update && sudo apt-get install -y apksigner
 
       - name: 还原keystore文件
@@ -40,29 +340,13 @@ jobs:
 
       - name: 对APK进行签名
         run: |
-          INPUT_APK=android/app/build/outputs/apk/release/app-release-unsigned.apk
-          OUTPUT_APK=android/app/build/outputs/apk/release/app-release.apk
-          test -s "$INPUT_APK"
-          apksigner sign \
-            --ks zexnote-key.jks \
-            --ks-pass pass:${{ secrets.KEYSTORE_PASSWORD }} \
-            --key-pass pass:${{ secrets.KEY_PASSWORD }} \
-            --ks-key-alias ${{ secrets.KEY_ALIAS }} \
-            --out "$OUTPUT_APK" \
-            "$INPUT_APK"
+          apksigner sign --ks zexnote-key.jks --ks-pass pass:${{ secrets.KEYSTORE_PASSWORD }} --key-pass pass:${{ secrets.KEY_PASSWORD }} --ks-key-alias ${{ secrets.KEY_ALIAS }} build/app/outputs/flutter-apk/app-release.apk
 
       - name: 校验APK签名
-        run: apksigner verify android/app/build/outputs/apk/release/app-release.apk
+        run: apksigner verify build/app/outputs/flutter-apk/app-release.apk
 
       - name: 列出编译产物
-        run: ls -lh android/app/build/outputs/apk/release/
-
-      - name: 读取版本号
-        id: get_version
-        run: |
-          VERSION=$(sed -n 's/.*versionName "\([^"]*\)".*/\1/p' android/app/build.gradle | head -1)
-          test -n "$VERSION"
-          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+        run: ls -lh build/app/outputs/flutter-apk/
 
       - name: 配置SSH签名环境
         env:
@@ -82,7 +366,8 @@ jobs:
       - name: 创建带SSH签名tag并推送到远程仓库
         run: |
           set -euo pipefail
-          TAG="v${{ steps.get_version.outputs.VERSION }}"
+          VERSION=$(grep '^version:' pubspec.yaml | head -1 | awk '{print $2}' | cut -d+ -f1)
+          TAG="v${VERSION}"
           git fetch --tags origin
           if git rev-parse --verify "refs/tags/$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists"
@@ -97,14 +382,15 @@ jobs:
           tag_name: v${{ steps.get_version.outputs.VERSION }}
           generate_release_notes: true
           make_latest: true
-          files: android/app/build/outputs/apk/release/app-release.apk
+          files: |
+            build/app/outputs/flutter-apk/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Trigger MirrorChyanUploading
         shell: bash
         run: |
-          gh workflow run --repo "$GITHUB_REPOSITORY" mirrorchyan_release.yml -f tag=v${{ steps.get_version.outputs.VERSION }}
-          gh workflow run --repo "$GITHUB_REPOSITORY" mirrorchyan_release_note.yml -f tag=v${{ steps.get_version.outputs.VERSION }}
+          gh workflow run --repo $GITHUB_REPOSITORY mirrorchyan_release.yml -f tag=v${{ steps.get_version.outputs.VERSION }}
+          gh workflow run --repo $GITHUB_REPOSITORY mirrorchyan_release_note.yml -f tag=v${{ steps.get_version.outputs.VERSION }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
