@@ -159,10 +159,10 @@ private class AppState(private val services: AppServices) {
         services.setString("saved_notes", array.toString())
     }
 
-    fun setDynamicColor(value: Boolean) { dynamicColor = value; services.setBoolean("dynamicColor", value) }
-    fun setThemeSeed(value: Color) { themeSeed = value; services.setInt("themeSeedColor", value.toArgb()) }
-    fun setNavigationBlur(value: Boolean) { navigationBlur = value; services.setBoolean("navigationBlur", value) }
-    fun setMonetBackground(value: Boolean) { monetBackground = value; services.setBoolean("monetBackground", value) }
+    fun updateDynamicColor(value: Boolean) { dynamicColor = value; services.setBoolean("dynamicColor", value) }
+    fun updateThemeSeed(value: Color) { themeSeed = value; services.setInt("themeSeedColor", value.toArgb()) }
+    fun updateNavigationBlur(value: Boolean) { navigationBlur = value; services.setBoolean("navigationBlur", value) }
+    fun updateMonetBackground(value: Boolean) { monetBackground = value; services.setBoolean("monetBackground", value) }
 }
 
 @Composable
@@ -281,7 +281,7 @@ private fun DirectoryScreen(services: AppServices, nav: NavHostController) {
 private fun SettingsScreen(state: AppState, nav: NavHostController) {
     Scaffold(containerColor = Color.Transparent, topBar = { TopAppBar(title = { Text("设置") }) }, bottomBar = { BottomNav(nav) }) { padding -> LazyColumn(Modifier.padding(padding)) {
         item { ListItem(leadingContent = { Icon(Icons.Default.Palette, null) }, headlineContent = { Text("主题设置") }, supportingContent = { Text("动态颜色与主题颜色自定义") }, modifier = Modifier.clickable { nav.navigate("theme") }) }
-        item { ListItem(leadingContent = { Icon(Icons.Default.WaterDrop, null) }, headlineContent = { Text("导航栏毛玻璃模糊") }, supportingContent = { Text("重启软件后生效") }, trailingContent = { Switch(state.navigationBlur, { state.setNavigationBlur(it) }) }) }
+        item { ListItem(leadingContent = { Icon(Icons.Default.WaterDrop, null) }, headlineContent = { Text("导航栏毛玻璃模糊") }, supportingContent = { Text("重启软件后生效") }, trailingContent = { Switch(state.navigationBlur, { state.updateNavigationBlur(it) }) }) }
         item { ListItem(leadingContent = { Icon(Icons.Default.Folder, null) }, headlineContent = { Text("下载文件目录") }, modifier = Modifier.clickable { nav.navigate("settings/directory") }) }
         item { ListItem(leadingContent = { Icon(Icons.Default.Info, null) }, headlineContent = { Text("关于 ZexNote") }, modifier = Modifier.clickable { nav.navigate("about") }) }
         item { ListItem(leadingContent = { Icon(Icons.Default.SystemUpdate, null) }, headlineContent = { Text("更新设置") }, supportingContent = { Text("自动检查与手动检查新版本") }, modifier = Modifier.clickable { nav.navigate("updates") }) }
@@ -294,8 +294,8 @@ private fun ThemeScreen(state: AppState, nav: NavHostController) {
     var dynamic by remember { mutableStateOf(state.dynamicColor) }
     var showColors by remember { mutableStateOf(false) }
     Scaffold(containerColor = Color.Transparent, topBar = { TopAppBar(title = { Text("主题设置") }, navigationIcon = { IconButton({ nav.popBackStack() }) { Icon(Icons.Default.ArrowBack, null) } }) }) { padding -> LazyColumn(Modifier.padding(padding)) {
-        item { ListItem(leadingContent = { Icon(Icons.Default.AutoAwesome, null) }, headlineContent = { Text("动态颜色（Material You）") }, supportingContent = { Text("跟随系统壁纸配色") }, trailingContent = { Switch(dynamic, { dynamic = it; state.setDynamicColor(it) }) }) }
-        item { ListItem(leadingContent = { Icon(Icons.Default.WaterDrop, null) }, headlineContent = { Text("动态莫奈背景") }, supportingContent = { Text("柔和色块缓慢晕染流动的背景效果") }, trailingContent = { Switch(state.monetBackground, { state.setMonetBackground(it) }) }) }
+        item { ListItem(leadingContent = { Icon(Icons.Default.AutoAwesome, null) }, headlineContent = { Text("动态颜色（Material You）") }, supportingContent = { Text("跟随系统壁纸配色") }, trailingContent = { Switch(dynamic, { dynamic = it; state.updateDynamicColor(it) }) }) }
+        item { ListItem(leadingContent = { Icon(Icons.Default.WaterDrop, null) }, headlineContent = { Text("动态莫奈背景") }, supportingContent = { Text("柔和色块缓慢晕染流动的背景效果") }, trailingContent = { Switch(state.monetBackground, { state.updateMonetBackground(it) }) }) }
         item { ListItem(leadingContent = { Icon(Icons.Default.Palette, null) }, headlineContent = { Text("主题颜色自定义（Beta）") }, supportingContent = { Text(if (dynamic) "你已开启动态颜色，该功能不可用" else "选择应用的主题配色风格") }, modifier = Modifier.clickable(enabled = !dynamic) { showColors = true }) }
     } }
     if (showColors) ThemeColorDialogCompose(state) { showColors = false }
@@ -334,7 +334,7 @@ private fun ThemeColorDialogCompose(state: AppState, close: () -> Unit) {
                 }
             }
         },
-        confirmButton = { Button({ state.setThemeSeed(selected); close() }) { Text("确定") } },
+        confirmButton = { Button({ state.updateThemeSeed(selected); close() }) { Text("确定") } },
         dismissButton = { TextButton(onClick = close) { Text("取消") } },
     )
 }
