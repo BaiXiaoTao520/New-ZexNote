@@ -15,7 +15,7 @@ import 'recommendations.dart';
 const String repository = "BaiXiaoTao520/New-ZexNote";
 const String repositoryUrl = "https://github.com/$repository";
 const String githubLatestApkUrl = "$repositoryUrl/releases/latest/download/app-release.apk";
-const String currentVersion = "2.4.0";
+const String currentVersion = "2.4.1";
 const String mirrorResId = String.fromEnvironment("MIRROR_RES_ID");
 const String mirrorApiUrl = "https://mirrorchyan.com/api/resources/$mirrorResId/latest";
 const String mirrorProjectUrl = "https://mirrorchyan.com/zh/projects?rid=$mirrorResId";
@@ -1236,7 +1236,7 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
   }
 }
 
-class NoteHomePage extends StatelessWidget {
+class NoteHomePage extends StatefulWidget {
   final List<Note> notes;
   final bool selectionMode;
   final Set<String> selectedNoteIds;
@@ -1255,23 +1255,77 @@ class NoteHomePage extends StatelessWidget {
   });
 
   @override
+  State<NoteHomePage> createState() => _NoteHomePageState();
+}
+
+class _NoteHomePageState extends State<NoteHomePage> {
+  final searchCtrl = TextEditingController();
+  final searchFocus = FocusNode();
+  bool searchVisible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    searchCtrl.addListener(() => setState(() {}));
+  }
+
+  List<Note> get _activeNotes {
+    final searchTerm = searchCtrl.text.trim().toLowerCase();
+    return widget.notes.where((note) {
+      if (note.isArchived) return false;
+      return searchTerm.isEmpty ||
+          note.title.toLowerCase().contains(searchTerm) ||
+          note.content.toLowerCase().contains(searchTerm);
+    }).toList();
+  }
+
+  void _toggleSearch() {
+    if (searchVisible) {
+      searchCtrl.clear();
+      setState(() => searchVisible = false);
+      return;
+    }
+    setState(() => searchVisible = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) => searchFocus.requestFocus());
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final activeNotes = notes.where((note) => !note.isArchived).toList();
-    final allSelected = activeNotes.isNotEmpty && selectedNoteIds.length == activeNotes.length;
+    final allActiveNotes = widget.notes.where((note) => !note.isArchived).toList();
+    final activeNotes = _activeNotes;
+    final allSelected = allActiveNotes.isNotEmpty && widget.selectedNoteIds.length == allActiveNotes.length;
+    final noMatches = allActiveNotes.isNotEmpty && activeNotes.isEmpty;
     return Scaffold(
       appBar: AppBar(
-        title: Text(selectionMode ? "已选择 ${selectedNoteIds.length} 项" : "ZexNote"),
-        actions: selectionMode
+        title: widget.selectionMode
+            ? Text("已选择 ${widget.selectedNoteIds.length} 项")
+            : searchVisible
+                ? TextField(
+                    controller: searchCtrl,
+                    focusNode: searchFocus,
+                    decoration: const InputDecoration(
+                      hintText: "搜索便签",
+                      border: InputBorder.none,
+                    ),
+                  )
+                : const Text("ZexNote"),
+        actions: widget.selectionMode
             ? [
                 IconButton(
                   tooltip: allSelected ? "取消全选" : "全选",
-                  onPressed: onToggleSelectAll,
+                  onPressed: widget.onToggleSelectAll,
                   icon: Icon(allSelected ? Icons.deselect : Icons.select_all),
                 ),
               ]
-            : null,
+            : [
+                IconButton(
+                  tooltip: searchVisible ? "关闭搜索" : "搜索便签",
+                  onPressed: _toggleSearch,
+                  icon: Icon(searchVisible ? Icons.search_off : Icons.search),
+                ),
+              ],
       ),
-      body: activeNotes.isEmpty
+      body: allActiveNotes.isEmpty
           ? const Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -1282,63 +1336,72 @@ class NoteHomePage extends StatelessWidget {
                 ],
               ),
             )
-          : ListView.builder(
-              padding: const EdgeInsets.only(bottom: 160),
-              itemCount: activeNotes.length,
-              itemBuilder: (context, index) {
-                final note = activeNotes[index];
-                final selected = selectedNoteIds.contains(note.id);
-                final foregroundColor = noteTextColor(note.color);
-                return Card(
-                  color: note.color,
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  clipBehavior: Clip.antiAlias,
-                  child: ListTile(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    onTap: () => selectionMode ? onToggleSelection(note) : onOpenNote(note),
-                    onLongPress: () => onToggleSelection(note),
-                    leading: selectionMode
-                        ? Checkbox(
-                            value: selected,
-                            onChanged: (_) => onToggleSelection(note),
-                          )
-                        : null,
-                    title: Text(
-                      note.title,
-                      style: TextStyle(
-                        color: foregroundColor,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          note.content,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: foregroundColor.withAlpha(210)),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          "创建于 ${formatNoteTime(note.createTime)}",
+          : noMatches
+              ? const Center(child: Text("未找到匹配的便签"))
+              : ListView.builder(
+                  padding: const EdgeInsets.only(bottom: 160),
+                  itemCount: activeNotes.length,
+                  itemBuilder: (context, index) {
+                    final note = activeNotes[index];
+                    final selected = widget.selectedNoteIds.contains(note.id);
+                    final foregroundColor = noteTextColor(note.color);
+                    return Card(
+                      color: note.color,
+                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      clipBehavior: Clip.antiAlias,
+                      child: ListTile(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        onTap: () => widget.selectionMode ? widget.onToggleSelection(note) : widget.onOpenNote(note),
+                        onLongPress: () => widget.onToggleSelection(note),
+                        leading: widget.selectionMode
+                            ? Checkbox(
+                                value: selected,
+                                onChanged: (_) => widget.onToggleSelection(note),
+                              )
+                            : null,
+                        title: Text(
+                          note.title,
                           style: TextStyle(
-                            color: foregroundColor.withAlpha(170),
-                            fontSize: 12,
+                            color: foregroundColor,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              note.content,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: foregroundColor.withAlpha(210)),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              "创建于 ${formatNoteTime(note.createTime)}",
+                              style: TextStyle(
+                                color: foregroundColor.withAlpha(170),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
     );
+  }
+
+  @override
+  void dispose() {
+    searchCtrl.dispose();
+    searchFocus.dispose();
+    super.dispose();
   }
 }
 
-class ArchivePage extends StatelessWidget {
+class ArchivePage extends StatefulWidget {
   final List<Note> notes;
   final bool selectionMode;
   final Set<String> selectedNoteIds;
@@ -1357,23 +1420,77 @@ class ArchivePage extends StatelessWidget {
   });
 
   @override
+  State<ArchivePage> createState() => _ArchivePageState();
+}
+
+class _ArchivePageState extends State<ArchivePage> {
+  final searchCtrl = TextEditingController();
+  final searchFocus = FocusNode();
+  bool searchVisible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    searchCtrl.addListener(() => setState(() {}));
+  }
+
+  List<Note> get _archivedNotes {
+    final searchTerm = searchCtrl.text.trim().toLowerCase();
+    return widget.notes.where((note) {
+      if (!note.isArchived) return false;
+      return searchTerm.isEmpty ||
+          note.title.toLowerCase().contains(searchTerm) ||
+          note.content.toLowerCase().contains(searchTerm);
+    }).toList();
+  }
+
+  void _toggleSearch() {
+    if (searchVisible) {
+      searchCtrl.clear();
+      setState(() => searchVisible = false);
+      return;
+    }
+    setState(() => searchVisible = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) => searchFocus.requestFocus());
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final archivedNotes = notes.where((note) => note.isArchived).toList();
-    final allSelected = archivedNotes.isNotEmpty && selectedNoteIds.length == archivedNotes.length;
+    final allArchivedNotes = widget.notes.where((note) => note.isArchived).toList();
+    final archivedNotes = _archivedNotes;
+    final allSelected = allArchivedNotes.isNotEmpty && widget.selectedNoteIds.length == allArchivedNotes.length;
+    final noMatches = allArchivedNotes.isNotEmpty && archivedNotes.isEmpty;
     return Scaffold(
       appBar: AppBar(
-        title: Text(selectionMode ? "已选择 ${selectedNoteIds.length} 项" : "归档"),
-        actions: selectionMode
+        title: widget.selectionMode
+            ? Text("已选择 ${widget.selectedNoteIds.length} 项")
+            : searchVisible
+                ? TextField(
+                    controller: searchCtrl,
+                    focusNode: searchFocus,
+                    decoration: const InputDecoration(
+                      hintText: "搜索归档便签",
+                      border: InputBorder.none,
+                    ),
+                  )
+                : const Text("归档"),
+        actions: widget.selectionMode
             ? [
                 IconButton(
                   tooltip: allSelected ? "取消全选" : "全选",
-                  onPressed: onToggleSelectAll,
+                  onPressed: widget.onToggleSelectAll,
                   icon: Icon(allSelected ? Icons.deselect : Icons.select_all),
                 ),
               ]
-            : null,
+            : [
+                IconButton(
+                  tooltip: searchVisible ? "关闭搜索" : "搜索归档便签",
+                  onPressed: _toggleSearch,
+                  icon: Icon(searchVisible ? Icons.search_off : Icons.search),
+                ),
+              ],
       ),
-      body: archivedNotes.isEmpty
+      body: allArchivedNotes.isEmpty
           ? const Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -1384,59 +1501,68 @@ class ArchivePage extends StatelessWidget {
                 ],
               ),
             )
-          : ListView.builder(
-              padding: const EdgeInsets.only(bottom: 160),
-              itemCount: archivedNotes.length,
-              itemBuilder: (context, index) {
-                final note = archivedNotes[index];
-                final selected = selectedNoteIds.contains(note.id);
-                final foregroundColor = noteTextColor(note.color);
-                return Card(
-                  color: note.color,
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  clipBehavior: Clip.antiAlias,
-                  child: ListTile(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    onTap: () => selectionMode ? onToggleSelection(note) : onOpenNote(note),
-                    onLongPress: () => onToggleSelection(note),
-                    leading: selectionMode
-                        ? Checkbox(
-                            value: selected,
-                            onChanged: (_) => onToggleSelection(note),
-                          )
-                        : null,
-                    title: Text(
-                      note.title,
-                      style: TextStyle(
-                        color: foregroundColor,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          note.content,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: foregroundColor.withAlpha(210)),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          "创建于 ${formatNoteTime(note.createTime)}",
+          : noMatches
+              ? const Center(child: Text("未找到匹配的归档便签"))
+              : ListView.builder(
+                  padding: const EdgeInsets.only(bottom: 160),
+                  itemCount: archivedNotes.length,
+                  itemBuilder: (context, index) {
+                    final note = archivedNotes[index];
+                    final selected = widget.selectedNoteIds.contains(note.id);
+                    final foregroundColor = noteTextColor(note.color);
+                    return Card(
+                      color: note.color,
+                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      clipBehavior: Clip.antiAlias,
+                      child: ListTile(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        onTap: () => widget.selectionMode ? widget.onToggleSelection(note) : widget.onOpenNote(note),
+                        onLongPress: () => widget.onToggleSelection(note),
+                        leading: widget.selectionMode
+                            ? Checkbox(
+                                value: selected,
+                                onChanged: (_) => widget.onToggleSelection(note),
+                              )
+                            : null,
+                        title: Text(
+                          note.title,
                           style: TextStyle(
-                            color: foregroundColor.withAlpha(170),
-                            fontSize: 12,
+                            color: foregroundColor,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              note.content,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: foregroundColor.withAlpha(210)),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              "创建于 ${formatNoteTime(note.createTime)}",
+                              style: TextStyle(
+                                color: foregroundColor.withAlpha(170),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
     );
+  }
+
+  @override
+  void dispose() {
+    searchCtrl.dispose();
+    searchFocus.dispose();
+    super.dispose();
   }
 }
 
@@ -1733,10 +1859,6 @@ class _NoteEditPageState extends State<NoteEditPage> {
                           isDense: true,
                         ),
                       ),
-                    ),
-                    TextButton(
-                      onPressed: _closeFind,
-                      child: const Text("取消"),
                     ),
                   ],
                 ),
