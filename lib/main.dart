@@ -15,7 +15,7 @@ import 'recommendations.dart';
 const String repository = "BaiXiaoTao520/New-ZexNote";
 const String repositoryUrl = "https://github.com/$repository";
 const String githubLatestApkUrl = "$repositoryUrl/releases/latest/download/app-release.apk";
-const String currentVersion = "2.3.3";
+const String currentVersion = "2.4.0";
 const String mirrorResId = String.fromEnvironment("MIRROR_RES_ID");
 const String mirrorApiUrl = "https://mirrorchyan.com/api/resources/$mirrorResId/latest";
 const String mirrorProjectUrl = "https://mirrorchyan.com/zh/projects?rid=$mirrorResId";
@@ -135,6 +135,12 @@ Color noteTextColor(Color background) {
   return background.computeLuminance() > 0.55
       ? const Color(0xFF171717)
       : Colors.white;
+}
+
+String formatNoteTime(DateTime time) {
+  String twoDigits(int value) => value.toString().padLeft(2, "0");
+  return "${time.year}-${twoDigits(time.month)}-${twoDigits(time.day)} "
+      "${twoDigits(time.hour)}:${twoDigits(time.minute)}";
 }
 
 class UpdateInfo {
@@ -1305,11 +1311,24 @@ class NoteHomePage extends StatelessWidget {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    subtitle: Text(
-                      note.content,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: foregroundColor.withAlpha(210)),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          note.content,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: foregroundColor.withAlpha(210)),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          "创建于 ${formatNoteTime(note.createTime)}",
+                          style: TextStyle(
+                            color: foregroundColor.withAlpha(170),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 );
@@ -1394,11 +1413,24 @@ class ArchivePage extends StatelessWidget {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    subtitle: Text(
-                      note.content,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: foregroundColor.withAlpha(210)),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          note.content,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: foregroundColor.withAlpha(210)),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          "创建于 ${formatNoteTime(note.createTime)}",
+                          style: TextStyle(
+                            color: foregroundColor.withAlpha(170),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 );
@@ -1424,12 +1456,64 @@ class NoteEditPage extends StatefulWidget {
   State<NoteEditPage> createState() => _NoteEditPageState();
 }
 
+class NoteSearchTextEditingController extends TextEditingController {
+  String _searchTerm = "";
+
+  NoteSearchTextEditingController({super.text});
+
+  set searchTerm(String value) {
+    if (_searchTerm == value) return;
+    _searchTerm = value;
+    notifyListeners();
+  }
+
+  @override
+  TextSpan buildTextSpan({
+    required BuildContext context,
+    TextStyle? style,
+    required bool withComposing,
+  }) {
+    if (_searchTerm.isEmpty || text.isEmpty) {
+      return super.buildTextSpan(
+        context: context,
+        style: style,
+        withComposing: withComposing,
+      );
+    }
+
+    final matches = RegExp(RegExp.escape(_searchTerm), caseSensitive: false).allMatches(text);
+    if (matches.isEmpty) return TextSpan(style: style, text: text);
+
+    final spans = <TextSpan>[];
+    var cursor = 0;
+    for (final match in matches) {
+      if (cursor < match.start) {
+        spans.add(TextSpan(text: text.substring(cursor, match.start)));
+      }
+      spans.add(
+        TextSpan(
+          text: text.substring(match.start, match.end),
+          style: const TextStyle(backgroundColor: Color(0xFFFFE082)),
+        ),
+      );
+      cursor = match.end;
+    }
+    if (cursor < text.length) spans.add(TextSpan(text: text.substring(cursor)));
+    return TextSpan(style: style, children: spans);
+  }
+}
+
 class _NoteEditPageState extends State<NoteEditPage> {
   late final TextEditingController titleCtrl;
-  late final TextEditingController contentCtrl;
+  late final NoteSearchTextEditingController contentCtrl;
+  late final TextEditingController findCtrl;
+  late final FocusNode findFocus;
+  late final DateTime draftCreateTime;
   late Color selectedColor;
   late bool isArchived;
   bool hasUnsavedChanges = false;
+  bool findVisible = false;
+  String lastContent = "";
 
   final colorOptions = [
     Colors.lightGreen.shade100,
@@ -1444,14 +1528,50 @@ class _NoteEditPageState extends State<NoteEditPage> {
   void initState() {
     super.initState();
     titleCtrl = TextEditingController(text: widget.existingNote?.title ?? "");
-    contentCtrl = TextEditingController(text: widget.existingNote?.content ?? "");
+    contentCtrl = NoteSearchTextEditingController(text: widget.existingNote?.content ?? "");
+    findCtrl = TextEditingController();
+    findFocus = FocusNode();
+    draftCreateTime = widget.existingNote?.createTime ?? DateTime.now();
+    lastContent = contentCtrl.text;
     selectedColor = widget.existingNote?.color ?? Colors.lightGreen.shade100;
     isArchived = widget.existingNote?.isArchived ?? false;
     titleCtrl.addListener(_markChanged);
-    contentCtrl.addListener(_markChanged);
+    contentCtrl.addListener(_onContentChanged);
+    findCtrl.addListener(_onFindChanged);
   }
 
   void _markChanged() => hasUnsavedChanges = true;
+
+  void _onContentChanged() {
+    final contentChanged = lastContent != contentCtrl.text;
+    lastContent = contentCtrl.text;
+    setState(() {
+      if (contentChanged) hasUnsavedChanges = true;
+    });
+  }
+
+  void _onFindChanged() {
+    contentCtrl.searchTerm = findCtrl.text;
+    setState(() {});
+  }
+
+  int get _wordCount => contentCtrl.text.replaceAll(RegExp(r"\s"), "").runes.length;
+
+  int get _matchCount {
+    final searchTerm = findCtrl.text;
+    if (searchTerm.isEmpty) return 0;
+    return RegExp(RegExp.escape(searchTerm), caseSensitive: false).allMatches(contentCtrl.text).length;
+  }
+
+  void _openFind() {
+    setState(() => findVisible = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) => findFocus.requestFocus());
+  }
+
+  void _closeFind() {
+    findCtrl.clear();
+    setState(() => findVisible = false);
+  }
 
   Future<bool> _onWillPop() async {
     if (!hasUnsavedChanges) return true;
@@ -1495,7 +1615,7 @@ class _NoteEditPageState extends State<NoteEditPage> {
       title: titleCtrl.text.isEmpty ? "无标题" : titleCtrl.text,
       content: contentCtrl.text,
       color: selectedColor,
-      createTime: widget.existingNote?.createTime ?? DateTime.now(),
+      createTime: draftCreateTime,
       isArchived: isArchived,
     );
   }
@@ -1562,6 +1682,11 @@ class _NoteEditPageState extends State<NoteEditPage> {
           title: const Text("编辑便签"),
           actions: [
             IconButton(
+              tooltip: "查找",
+              onPressed: findVisible ? _closeFind : _openFind,
+              icon: Icon(findVisible ? Icons.search_off : Icons.search),
+            ),
+            IconButton(
               tooltip: isArchived ? "移出归档" : "归档",
               onPressed: _toggleArchive,
               color: isArchived
@@ -1592,6 +1717,30 @@ class _NoteEditPageState extends State<NoteEditPage> {
                 decoration: const InputDecoration(hintText: "标题", border: InputBorder.none),
                 style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
+              if (findVisible) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: findCtrl,
+                        focusNode: findFocus,
+                        decoration: InputDecoration(
+                          hintText: "查找笔记内容",
+                          prefixIcon: const Icon(Icons.search),
+                          suffixText: findCtrl.text.isEmpty ? null : "$_matchCount 处",
+                          border: const OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: _closeFind,
+                      child: const Text("取消"),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 8),
               Expanded(
                 child: TextField(
@@ -1603,6 +1752,21 @@ class _NoteEditPageState extends State<NoteEditPage> {
                     border: InputBorder.none,
                   ),
                 ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      "创建于 ${formatNoteTime(draftCreateTime)}",
+                      style: Theme.of(context).textTheme.labelMedium,
+                    ),
+                  ),
+                  Text(
+                    "字数 $_wordCount",
+                    style: Theme.of(context).textTheme.labelMedium,
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
               Row(
@@ -1670,6 +1834,8 @@ class _NoteEditPageState extends State<NoteEditPage> {
   void dispose() {
     titleCtrl.dispose();
     contentCtrl.dispose();
+    findCtrl.dispose();
+    findFocus.dispose();
     super.dispose();
   }
 }
