@@ -45,11 +45,25 @@ Future<bool> hasRootAccess() async {
   }
 }
 
-Future<bool> rootInstallApk(String path) async {
+class RootInstallResult {
+  final bool success;
+  final String message;
+
+  const RootInstallResult({required this.success, required this.message});
+}
+
+Future<RootInstallResult> rootInstallApk(String path) async {
   try {
-    return await installerChannel.invokeMethod<bool>("rootInstallApk", {"path": path}) ?? false;
-  } catch (_) {
-    return false;
+    final response = await installerChannel.invokeMapMethod<String, dynamic>(
+      "rootInstallApk",
+      {"path": path},
+    );
+    return RootInstallResult(
+      success: response?["success"] == true,
+      message: response?["message"]?.toString().trim() ?? "",
+    );
+  } catch (error) {
+    return RootInstallResult(success: false, message: error.toString());
   }
 }
 
@@ -105,10 +119,17 @@ Future<void> installApk(BuildContext context, String path) async {
   await Future<void>.delayed(Duration.zero);
 
   if (useRoot) {
-    final installed = await rootInstallApk(path);
+    final installResult = await rootInstallApk(path);
     if (!context.mounted) return;
     Navigator.of(context, rootNavigator: true).pop();
-    showAppToast(context, installed ? "安装成功" : "Root 静默安装失败", isError: !installed);
+    final failureMessage = installResult.message.isEmpty
+        ? "Root 静默安装失败"
+        : "Root 静默安装失败：${installResult.message}";
+    showAppToast(
+      context,
+      installResult.success ? "安装成功" : failureMessage,
+      isError: !installResult.success,
+    );
     return;
   }
 

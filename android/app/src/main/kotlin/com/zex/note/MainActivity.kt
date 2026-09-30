@@ -80,9 +80,9 @@ class MainActivity : FlutterActivity() {
                     "rootInstallApk" -> {
                         val path = call.argument<String>("path")
                         if (path == null || !File(path).isFile) {
-                            result.success(false)
+                            result.success(mapOf("success" to false, "message" to "APK 文件不存在"))
                         } else {
-                            runRootCommand("pm install -r -- ${shellQuote(path)}", result)
+                            runRootInstall(File(path), result)
                         }
                     }
                     "installApk" -> {
@@ -122,7 +122,33 @@ class MainActivity : FlutterActivity() {
         }.start()
     }
 
-    private fun shellQuote(value: String): String = "'${value.replace("'", "'\"'\"'")}'"
+    private fun runRootInstall(apkFile: File, result: MethodChannel.Result) {
+        Thread {
+            var message = ""
+            val tempPath = "/data/local/tmp/zexnote-${System.nanoTime()}.apk"
+            val success = try {
+                val command = "cat > $tempPath && chown 2000:2000 $tempPath && chmod 0644 $tempPath && " +
+                    "pm install -r $tempPath; status=\$?; rm -f $tempPath; exit \$status"
+                val process = ProcessBuilder("su", "-c", command)
+                    .redirectErrorStream(true)
+                    .start()
+                process.outputStream.use { output ->
+                    apkFile.inputStream().use { input -> input.copyTo(output) }
+                }
+                message = process.inputStream.bufferedReader().use { it.readText() }.trim()
+                process.waitFor() == 0 && message.contains("Success", ignoreCase = true)
+            } catch (error: Exception) {
+                message = error.message ?: error.javaClass.simpleName
+                try {
+                    ProcessBuilder("su", "-c", "rm -f $tempPath").start().waitFor()
+                } catch (_: Exception) {}
+                false
+            }
+            runOnUiThread {
+                result.success(mapOf("success" to success, "message" to message))
+            }
+        }.start()
+    }
 
     @Suppress("DEPRECATION")
     private fun hasSameApkSignature(apkFile: File): Boolean {
