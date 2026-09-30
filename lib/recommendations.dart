@@ -509,7 +509,7 @@ class _RecommendationDownloadDialogState extends State<RecommendationDownloadDia
         children: [
           WaveProgressIndicator(
             value: totalBytes > 0 ? progress : null,
-            height: 18,
+            height: 10,
           ),
           const SizedBox(height: 10),
           Text(

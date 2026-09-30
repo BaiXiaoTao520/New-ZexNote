@@ -11,7 +11,7 @@ class WaveProgressIndicator extends StatefulWidget {
   const WaveProgressIndicator({
     super.key,
     this.value,
-    this.height = 16,
+    this.height = 10,
     this.color,
     this.trackColor,
   }) : assert(value == null || (value >= 0 && value <= 1));
@@ -145,7 +145,7 @@ class _WaveProgressPainter extends CustomPainter {
 
     final wavePath = Path()..moveTo(clippedStartX, size.height);
     const step = 2.0;
-    final amplitude = math.max(1.8, size.height * 0.16).toDouble();
+    final amplitude = math.max(0.8, size.height * 0.10).toDouble();
     final centerY = size.height / 2;
     for (var x = clippedStartX; x <= endX; x += step) {
       final y = centerY + math.sin((x * 0.16) + phase * math.pi * 2) * amplitude;
@@ -159,20 +159,20 @@ class _WaveProgressPainter extends CustomPainter {
     canvas.clipRRect(trackRect);
     final fillPaint = Paint()
       ..shader = LinearGradient(
-        colors: [color.withAlpha(210), color],
+        colors: [color.withAlpha(175), color.withAlpha(220)],
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
       ).createShader(Offset.zero & size);
     canvas.drawPath(wavePath, fillPaint);
 
     final highlightPaint = Paint()
-      ..color = Colors.white.withAlpha(70)
-      ..strokeWidth = math.max(1.0, size.height * 0.08).toDouble()
+      ..color = Colors.white.withAlpha(48)
+      ..strokeWidth = math.max(0.6, size.height * 0.055).toDouble()
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
     canvas.drawLine(
-      Offset(clippedStartX + radius, radius * 0.62),
-      Offset(math.max(clippedStartX + radius, endX - radius).toDouble(), radius * 0.62),
+      Offset(clippedStartX + radius, radius * 0.74),
+      Offset(math.max(clippedStartX + radius, endX - radius).toDouble(), radius * 0.74),
       highlightPaint,
     );
     canvas.restore();
