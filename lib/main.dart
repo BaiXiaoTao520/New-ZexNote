@@ -2102,10 +2102,12 @@ class _RootSilentInstallTileState extends State<RootSilentInstallTile> {
       savedEnabled = false;
       await setRootSilentInstallEnabled(false);
     }
-    if (mounted) setState(() {
-      enabled = savedEnabled;
-      loading = false;
-    });
+    if (mounted) {
+      setState(() {
+        enabled = savedEnabled;
+        loading = false;
+      });
+    }
   }
 
   Future<void> _setEnabled(bool value) async {
