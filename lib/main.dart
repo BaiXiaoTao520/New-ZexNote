@@ -16,7 +16,7 @@ import 'wave_progress_indicator.dart';
 const String repository = "BaiXiaoTao520/New-ZexNote";
 const String repositoryUrl = "https://github.com/$repository";
 const String githubLatestApkUrl = "$repositoryUrl/releases/latest/download/app-release.apk";
-const String currentVersion = "3.0.1";
+const String currentVersion = "3.0.2";
 const String mirrorResId = String.fromEnvironment("MIRROR_RES_ID");
 const String mirrorApiUrl = "https://mirrorchyan.com/api/resources/$mirrorResId/latest";
 const String mirrorProjectUrl = "https://mirrorchyan.com/zh/projects?rid=$mirrorResId";
@@ -1211,7 +1211,7 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
         children: [
           WaveProgressIndicator(
             value: totalBytes > 0 ? progress : null,
-            height: 18,
+            height: 10,
           ),
           const SizedBox(height: 10),
           Text(
@@ -2541,25 +2541,19 @@ class _UpdateCheckingDialogState extends State<UpdateCheckingDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text("检查更新"),
+    return const AlertDialog(
+      title: Text("检查更新"),
       content: SizedBox(
         width: 280,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        child: Row(
           children: [
-            const WaveCircularProgressIndicator(size: 64),
-            const SizedBox(height: 20),
-            Text(
-              "正在检查最新版本…",
-              style: Theme.of(context).textTheme.titleMedium,
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 3),
             ),
-            const SizedBox(height: 6),
-            Text(
-              "正在连接 GitHub 与镜像服务",
-              style: Theme.of(context).textTheme.bodySmall,
-              textAlign: TextAlign.center,
-            ),
+            SizedBox(width: 16),
+            Expanded(child: Text("正在检查最新版本…")),
           ],
         ),
       ),
