@@ -11,12 +11,11 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'app_services.dart';
 import 'recommendations.dart';
-import 'wave_progress_indicator.dart';
 
 const String repository = "BaiXiaoTao520/New-ZexNote";
 const String repositoryUrl = "https://github.com/$repository";
 const String githubLatestApkUrl = "$repositoryUrl/releases/latest/download/app-release.apk";
-const String currentVersion = "3.0.2";
+const String currentVersion = "3.0.5";
 const String mirrorResId = String.fromEnvironment("MIRROR_RES_ID");
 const String mirrorApiUrl = "https://mirrorchyan.com/api/resources/$mirrorResId/latest";
 const String mirrorProjectUrl = "https://mirrorchyan.com/zh/projects?rid=$mirrorResId";
@@ -937,15 +936,7 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
     }
   }
 
-  Future<void> _installApk(String path) async {
-    try {
-      await installerChannel.invokeMethod<void>("installApk", {"path": path});
-    } catch (_) {
-      if (mounted) {
-        showAppToast(context, "无法打开系统安装器", isError: true);
-      }
-    }
-  }
+  Future<void> _installApk(String path) => installApk(context, path);
 
   Future<void> _confirmInstallPermission() async {
     if (!mounted || downloading) return;
@@ -992,6 +983,10 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
   Future<void> _prepareInstall(String path) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString("pending_apk_path", path);
+    if ((await rootSilentInstallEnabled()) && await hasRootAccess()) {
+      await _installApk(path);
+      return;
+    }
     if (await _canInstallPackages()) {
       await _installApk(path);
       return;
@@ -1209,10 +1204,7 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          WaveProgressIndicator(
-            value: totalBytes > 0 ? progress : null,
-            height: 10,
-          ),
+          LinearProgressIndicator(value: totalBytes > 0 ? progress : null),
           const SizedBox(height: 10),
           Text(
             totalBytes > 0 && !completed
@@ -2049,6 +2041,7 @@ class SettingPage extends StatelessWidget {
               },
             ),
           ),
+          const RootSilentInstallTile(),
           ListTile(
             leading: const Icon(Icons.folder_outlined),
             title: const Text("下载文件目录"),
@@ -2082,6 +2075,67 @@ class SettingPage extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class RootSilentInstallTile extends StatefulWidget {
+  const RootSilentInstallTile({super.key});
+
+  @override
+  State<RootSilentInstallTile> createState() => _RootSilentInstallTileState();
+}
+
+class _RootSilentInstallTileState extends State<RootSilentInstallTile> {
+  bool enabled = false;
+  bool loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPreference();
+  }
+
+  Future<void> _loadPreference() async {
+    var savedEnabled = await rootSilentInstallEnabled();
+    if (savedEnabled && !await hasRootAccess()) {
+      savedEnabled = false;
+      await setRootSilentInstallEnabled(false);
+    }
+    if (mounted) setState(() {
+      enabled = savedEnabled;
+      loading = false;
+    });
+  }
+
+  Future<void> _setEnabled(bool value) async {
+    if (!value) {
+      await setRootSilentInstallEnabled(false);
+      if (mounted) setState(() => enabled = false);
+      return;
+    }
+
+    final granted = await hasRootAccess();
+    if (!mounted) return;
+    if (!granted) {
+      showAppToast(context, "未检测到 Root 授权，无法开启静默安装", isError: true);
+      return;
+    }
+    await setRootSilentInstallEnabled(true);
+    if (mounted) {
+      setState(() => enabled = true);
+      showAppToast(context, "Root 静默安装已开启");
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SwitchListTile(
+      secondary: const Icon(Icons.admin_panel_settings_outlined),
+      title: const Text("Root 静默安装"),
+      subtitle: const Text("需 Root 管理器已授权，安装时不打开系统安装器"),
+      value: enabled,
+      onChanged: loading ? null : _setEnabled,
     );
   }
 }
@@ -2665,7 +2719,7 @@ class _DownloadDirectoryDialogState extends State<DownloadDirectoryDialog> {
       content: loading
           ? const SizedBox(
               height: 72,
-              child: Center(child: WaveCircularProgressIndicator(size: 40)),
+              child: Center(child: CircularProgressIndicator()),
             )
           : TextField(
               controller: directoryController,
@@ -2910,7 +2964,7 @@ class _ContributorsDialogState extends State<ContributorsDialog> {
                       child: SizedBox(
                         width: 22,
                         height: 22,
-                        child: WaveCircularProgressIndicator(size: 22),
+                        child: CircularProgressIndicator(strokeWidth: 2),
                       ),
                     );
                   },
@@ -2934,7 +2988,7 @@ class _ContributorsDialogState extends State<ContributorsDialog> {
     if (contributors == null && errorMessage == null) {
       return const SizedBox(
         height: 220,
-        child: Center(child: WaveCircularProgressIndicator(size: 46)),
+        child: Center(child: CircularProgressIndicator()),
       );
     }
     if (errorMessage != null) {

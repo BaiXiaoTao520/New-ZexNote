@@ -6,7 +6,6 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'app_services.dart';
-import 'wave_progress_indicator.dart';
 
 class RecommendedApp {
   final String name;
@@ -82,8 +81,9 @@ const coolMonitorRecommendation = RecommendedApp(
   name: "CoolMonitor",
   version: "v5.3.2",
   summary: "开源设备健康监控诊断工具",
-  downloadUrl: "https://gitee.com/hm1997a/cool-monitor/releases/download/v5.3.2/CoolMonitor_v5.3.2_release_20260926_130735.apk",
+  downloadUrl: "https://zexrikka.lanzoul.com/b00zyz1u3a",
   icon: Icons.monitor_heart_outlined,
+  browserOnly: true,
   description: "CoolMonitor 安卓设备健康监控诊断工具，实时监测CPU/电池温度、后台耗电应用、WiFi网络风险，支持App权限审计、垃圾营销通知过滤、电池健康评估，内置AI智能分析设备异常并给出优化建议，纯本地数据处理不上传隐私，无广告免费使用",
 );
 
@@ -247,7 +247,12 @@ class RecommendationInfoDialog extends StatelessWidget {
           onPressed: () async {
             Navigator.pop(context);
             if (app.browserOnly) {
-              if (app.browserDirect) {
+              if (app.name == coolMonitorRecommendation.name) {
+                showDialog<void>(
+                  context: context,
+                  builder: (dialogContext) => CoolMonitorDownloadInfoDialog(url: app.downloadUrl),
+                );
+              } else if (app.browserDirect) {
                 final launched = await launchUrl(
                   Uri.parse(app.downloadUrl),
                   mode: LaunchMode.externalApplication,
@@ -309,6 +314,46 @@ class BrowserDownloadInfoDialog extends StatelessWidget {
           },
           icon: const Icon(Icons.open_in_browser),
           label: const Text("打开浏览器"),
+        ),
+      ],
+    );
+  }
+}
+
+class CoolMonitorDownloadInfoDialog extends StatelessWidget {
+  final String url;
+
+  const CoolMonitorDownloadInfoDialog({super.key, required this.url});
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text("CoolMonitor 网盘下载"),
+      content: const Text(
+        "即将跳转至浏览器\n"
+        "网盘商：蓝奏云\n"
+        "提取码：dem0\n"
+        "建议更换为电脑 UA 访问下载文件",
+        style: TextStyle(height: 1.5),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("取消"),
+        ),
+        FilledButton.icon(
+          onPressed: () async {
+            Navigator.pop(context);
+            final launched = await launchUrl(
+              Uri.parse(url),
+              mode: LaunchMode.externalApplication,
+            );
+            if (!launched && context.mounted) {
+              showAppToast(context, "无法打开浏览器", isError: true);
+            }
+          },
+          icon: const Icon(Icons.open_in_browser),
+          label: const Text("网盘下载"),
         ),
       ],
     );
@@ -441,6 +486,10 @@ class _RecommendationDownloadDialogState extends State<RecommendationDownloadDia
   Future<void> _install() async {
     final path = downloadedPath;
     if (path == null) return;
+    if ((await rootSilentInstallEnabled()) && await hasRootAccess()) {
+      await _launchInstaller(path);
+      return;
+    }
     if (await _canInstallPackages()) {
       await _launchInstaller(path);
       return;
@@ -482,13 +531,7 @@ class _RecommendationDownloadDialogState extends State<RecommendationDownloadDia
     }
   }
 
-  Future<void> _launchInstaller(String path) async {
-    try {
-      await installerChannel.invokeMethod<void>("installApk", {"path": path});
-    } catch (_) {
-      if (mounted) showAppToast(context, "无法打开系统安装器", isError: true);
-    }
-  }
+  Future<void> _launchInstaller(String path) => installApk(context, path);
 
   @override
   Widget build(BuildContext context) {
@@ -507,10 +550,7 @@ class _RecommendationDownloadDialogState extends State<RecommendationDownloadDia
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          WaveProgressIndicator(
-            value: totalBytes > 0 ? progress : null,
-            height: 10,
-          ),
+          LinearProgressIndicator(value: totalBytes > 0 ? progress : null),
           const SizedBox(height: 10),
           Text(
             totalBytes > 0 && !completed
