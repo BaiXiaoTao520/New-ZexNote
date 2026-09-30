@@ -96,8 +96,8 @@ jobs:
                   localProperties.load(reader)
               }
           }
-          def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '26'
-          def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '3.0.0'
+          def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '27'
+          def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '3.0.1'
           android {
               namespace "com.zex.note"
               compileSdk 36
