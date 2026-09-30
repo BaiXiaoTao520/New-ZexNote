@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'app_services.dart';
+import 'wave_progress_indicator.dart';
 
 class RecommendedApp {
   final String name;
@@ -506,7 +507,7 @@ class _RecommendationDownloadDialogState extends State<RecommendationDownloadDia
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          LinearProgressIndicator(value: totalBytes > 0 ? progress : null),
+          WaveProgressIndicator(value: totalBytes > 0 ? progress : null),
           const SizedBox(height: 10),
           Text(
             totalBytes > 0 && !completed

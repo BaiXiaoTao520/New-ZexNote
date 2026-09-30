@@ -11,11 +11,12 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'app_services.dart';
 import 'recommendations.dart';
+import 'wave_progress_indicator.dart';
 
 const String repository = "BaiXiaoTao520/New-ZexNote";
 const String repositoryUrl = "https://github.com/$repository";
 const String githubLatestApkUrl = "$repositoryUrl/releases/latest/download/app-release.apk";
-const String currentVersion = "2.4.1";
+const String currentVersion = "3.0.0";
 const String mirrorResId = String.fromEnvironment("MIRROR_RES_ID");
 const String mirrorApiUrl = "https://mirrorchyan.com/api/resources/$mirrorResId/latest";
 const String mirrorProjectUrl = "https://mirrorchyan.com/zh/projects?rid=$mirrorResId";
@@ -361,6 +362,8 @@ class MainPage extends StatefulWidget {
 class _MainPageState extends State<MainPage> {
   int currentIndex = 0;
   final PageController pageCtrl = PageController();
+  final homePageKey = GlobalKey<_NoteHomePageState>();
+  final archivePageKey = GlobalKey<_ArchivePageState>();
   List<Note> notes = [];
   final Set<String> selectedNoteIds = <String>{};
   final Set<String> selectedArchivedNoteIds = <String>{};
@@ -654,17 +657,30 @@ class _MainPageState extends State<MainPage> {
         : currentIndex == 1
             ? selectedArchivedNoteIds
             : const <String>{};
+    final pageSearchVisible = currentIndex == 0
+        ? homePageKey.currentState?.searchVisible ?? false
+        : currentIndex == 1
+            ? archivePageKey.currentState?.searchVisible ?? false
+            : false;
     return PopScope(
-      canPop: !pageSelectionMode,
+      canPop: !pageSelectionMode && !pageSearchVisible,
       onPopInvokedWithResult: (didPop, result) {
-        if (didPop || !pageSelectionMode) return;
-        setState(() {
-          if (currentIndex == 0) {
-            selectedNoteIds.clear();
-          } else if (currentIndex == 1) {
-            selectedArchivedNoteIds.clear();
-          }
-        });
+        if (didPop) return;
+        if (pageSelectionMode) {
+          setState(() {
+            if (currentIndex == 0) {
+              selectedNoteIds.clear();
+            } else if (currentIndex == 1) {
+              selectedArchivedNoteIds.clear();
+            }
+          });
+          return;
+        }
+        if (currentIndex == 0) {
+          homePageKey.currentState?.closeSearch();
+        } else if (currentIndex == 1) {
+          archivePageKey.currentState?.closeSearch();
+        }
       },
       child: Scaffold(
         body: Stack(
@@ -674,20 +690,24 @@ class _MainPageState extends State<MainPage> {
             onPageChanged: (index) => setState(() => currentIndex = index),
             children: [
               NoteHomePage(
+                key: homePageKey,
                 notes: notes,
                 selectionMode: selectionMode,
                 selectedNoteIds: selectedNoteIds,
                 onOpenNote: openEditPage,
                 onToggleSelection: toggleNoteSelection,
                 onToggleSelectAll: toggleSelectAll,
+                onSearchVisibilityChanged: (_) => setState(() {}),
               ),
               ArchivePage(
+                key: archivePageKey,
                 notes: notes,
                 selectionMode: archiveSelectionMode,
                 selectedNoteIds: selectedArchivedNoteIds,
                 onOpenNote: openEditPage,
                 onToggleSelection: toggleArchivedNoteSelection,
                 onToggleSelectAll: toggleArchivedSelectAll,
+                onSearchVisibilityChanged: (_) => setState(() {}),
               ),
               const AppRecommendationsPage(),
               SettingPage(onCheckUpdate: checkVersion),
@@ -1189,7 +1209,7 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          LinearProgressIndicator(value: totalBytes > 0 ? progress : null),
+          WaveProgressIndicator(value: totalBytes > 0 ? progress : null),
           const SizedBox(height: 10),
           Text(
             totalBytes > 0 && !completed
@@ -1243,6 +1263,7 @@ class NoteHomePage extends StatefulWidget {
   final ValueChanged<Note> onOpenNote;
   final ValueChanged<Note> onToggleSelection;
   final VoidCallback onToggleSelectAll;
+  final ValueChanged<bool> onSearchVisibilityChanged;
 
   const NoteHomePage({
     super.key,
@@ -1252,6 +1273,7 @@ class NoteHomePage extends StatefulWidget {
     required this.onOpenNote,
     required this.onToggleSelection,
     required this.onToggleSelectAll,
+    required this.onSearchVisibilityChanged,
   });
 
   @override
@@ -1281,12 +1303,21 @@ class _NoteHomePageState extends State<NoteHomePage> {
 
   void _toggleSearch() {
     if (searchVisible) {
-      searchCtrl.clear();
-      setState(() => searchVisible = false);
+      closeSearch();
       return;
     }
     setState(() => searchVisible = true);
+    widget.onSearchVisibilityChanged(true);
     WidgetsBinding.instance.addPostFrameCallback((_) => searchFocus.requestFocus());
+  }
+
+  void closeSearch() {
+    searchCtrl.clear();
+    searchFocus.unfocus();
+    if (searchVisible) {
+      setState(() => searchVisible = false);
+      widget.onSearchVisibilityChanged(false);
+    }
   }
 
   @override
@@ -1408,6 +1439,7 @@ class ArchivePage extends StatefulWidget {
   final ValueChanged<Note> onOpenNote;
   final ValueChanged<Note> onToggleSelection;
   final VoidCallback onToggleSelectAll;
+  final ValueChanged<bool> onSearchVisibilityChanged;
 
   const ArchivePage({
     super.key,
@@ -1417,6 +1449,7 @@ class ArchivePage extends StatefulWidget {
     required this.onOpenNote,
     required this.onToggleSelection,
     required this.onToggleSelectAll,
+    required this.onSearchVisibilityChanged,
   });
 
   @override
@@ -1446,12 +1479,21 @@ class _ArchivePageState extends State<ArchivePage> {
 
   void _toggleSearch() {
     if (searchVisible) {
-      searchCtrl.clear();
-      setState(() => searchVisible = false);
+      closeSearch();
       return;
     }
     setState(() => searchVisible = true);
+    widget.onSearchVisibilityChanged(true);
     WidgetsBinding.instance.addPostFrameCallback((_) => searchFocus.requestFocus());
+  }
+
+  void closeSearch() {
+    searchCtrl.clear();
+    searchFocus.unfocus();
+    if (searchVisible) {
+      setState(() => searchVisible = false);
+      widget.onSearchVisibilityChanged(false);
+    }
   }
 
   @override
@@ -1801,6 +1843,10 @@ class _NoteEditPageState extends State<NoteEditPage> {
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
+        if (findVisible) {
+          _closeFind();
+          return;
+        }
         if (await _onWillPop() && context.mounted) Navigator.pop(context);
       },
       child: Scaffold(
@@ -2501,7 +2547,7 @@ class _UpdateCheckingDialogState extends State<UpdateCheckingDialog> {
             SizedBox(
               width: 24,
               height: 24,
-              child: CircularProgressIndicator(strokeWidth: 3),
+              child: WaveProgressIndicator(height: 24),
             ),
             SizedBox(width: 16),
             Expanded(child: Text("正在检查最新版本…")),
@@ -2616,7 +2662,7 @@ class _DownloadDirectoryDialogState extends State<DownloadDirectoryDialog> {
       content: loading
           ? const SizedBox(
               height: 72,
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: WaveProgressIndicator(height: 18)),
             )
           : TextField(
               controller: directoryController,
@@ -2861,7 +2907,7 @@ class _ContributorsDialogState extends State<ContributorsDialog> {
                       child: SizedBox(
                         width: 22,
                         height: 22,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: WaveProgressIndicator(height: 14),
                       ),
                     );
                   },
@@ -2885,7 +2931,7 @@ class _ContributorsDialogState extends State<ContributorsDialog> {
     if (contributors == null && errorMessage == null) {
       return const SizedBox(
         height: 220,
-        child: Center(child: CircularProgressIndicator()),
+        child: Center(child: WaveProgressIndicator(height: 18)),
       );
     }
     if (errorMessage != null) {
