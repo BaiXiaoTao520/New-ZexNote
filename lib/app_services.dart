@@ -37,6 +37,32 @@ Future<void> openStoragePermissionSettings() async {
   } catch (_) {}
 }
 
+Future<bool> hasRootAccess() async {
+  try {
+    return await installerChannel.invokeMethod<bool>("hasRootAccess") ?? false;
+  } catch (_) {
+    return false;
+  }
+}
+
+Future<bool> rootInstallApk(String path) async {
+  try {
+    return await installerChannel.invokeMethod<bool>("rootInstallApk", {"path": path}) ?? false;
+  } catch (_) {
+    return false;
+  }
+}
+
+Future<bool> rootSilentInstallEnabled() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getBool("rootSilentInstall") ?? false;
+}
+
+Future<void> setRootSilentInstallEnabled(bool enabled) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setBool("rootSilentInstall", enabled);
+}
+
 Future<bool> ensureStoragePermission(BuildContext context) async {
   if (await hasStoragePermission()) return true;
   if (!context.mounted) return false;
@@ -69,6 +95,93 @@ Future<bool> ensureStoragePermission(BuildContext context) async {
     if (!shouldRecheck) return false;
     if (await hasStoragePermission()) return true;
     if (!context.mounted) return false;
+  }
+}
+
+Future<void> installApk(BuildContext context, String path) async {
+  final useRoot = (await rootSilentInstallEnabled()) && await hasRootAccess();
+  if (!context.mounted) return;
+  unawaited(showInstallingDialog(context));
+  await Future<void>.delayed(Duration.zero);
+
+  if (useRoot) {
+    final installed = await rootInstallApk(path);
+    if (!context.mounted) return;
+    Navigator.of(context, rootNavigator: true).pop();
+    showAppToast(context, installed ? "安装成功" : "Root 静默安装失败", isError: !installed);
+    return;
+  }
+
+  try {
+    await installerChannel.invokeMethod<void>("installApk", {"path": path});
+  } catch (_) {
+    if (!context.mounted) return;
+    Navigator.of(context, rootNavigator: true).pop();
+    showAppToast(context, "无法打开系统安装器", isError: true);
+  }
+}
+
+Future<void> showInstallingDialog(BuildContext context) {
+  return showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (dialogContext) => const InstallationProgressDialog(),
+  );
+}
+
+class InstallationProgressDialog extends StatefulWidget {
+  const InstallationProgressDialog({super.key});
+
+  @override
+  State<InstallationProgressDialog> createState() => _InstallationProgressDialogState();
+}
+
+class _InstallationProgressDialogState extends State<InstallationProgressDialog>
+    with WidgetsBindingObserver {
+  bool openedInstaller = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
+      openedInstaller = true;
+      return;
+    }
+    if (state == AppLifecycleState.resumed && openedInstaller && mounted) {
+      Navigator.pop(context);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      child: const AlertDialog(
+        title: Text("正在安装"),
+        content: Row(
+          children: [
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 3),
+            ),
+            SizedBox(width: 16),
+            Expanded(child: Text("正在交给系统安装程序处理…")),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 }
 

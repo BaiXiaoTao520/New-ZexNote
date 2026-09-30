@@ -76,6 +76,15 @@ class MainActivity : FlutterActivity() {
                         val path = call.argument<String>("path")
                         result.success(path != null && hasSameApkSignature(File(path)))
                     }
+                    "hasRootAccess" -> runRootCommand("id", result)
+                    "rootInstallApk" -> {
+                        val path = call.argument<String>("path")
+                        if (path == null || !File(path).isFile) {
+                            result.success(false)
+                        } else {
+                            runRootCommand("pm install -r -- ${shellQuote(path)}", result)
+                        }
+                    }
                     "installApk" -> {
                         val path = call.argument<String>("path")
                         if (path == null) {
@@ -100,6 +109,20 @@ class MainActivity : FlutterActivity() {
                 }
             }
     }
+
+    private fun runRootCommand(command: String, result: MethodChannel.Result) {
+        Thread {
+            val success = try {
+                val process = ProcessBuilder("su", "-c", command).start()
+                process.waitFor() == 0
+            } catch (_: Exception) {
+                false
+            }
+            runOnUiThread { result.success(success) }
+        }.start()
+    }
+
+    private fun shellQuote(value: String): String = "'${value.replace("'", "'\"'\"'")}'"
 
     @Suppress("DEPRECATION")
     private fun hasSameApkSignature(apkFile: File): Boolean {
