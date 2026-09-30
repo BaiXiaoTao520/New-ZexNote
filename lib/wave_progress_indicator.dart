@@ -11,7 +11,7 @@ class WaveProgressIndicator extends StatefulWidget {
   const WaveProgressIndicator({
     super.key,
     this.value,
-    this.height = 12,
+    this.height = 16,
     this.color,
     this.trackColor,
   }) : assert(value == null || (value >= 0 && value <= 1));
@@ -29,7 +29,7 @@ class _WaveProgressIndicatorState extends State<WaveProgressIndicator>
     super.initState();
     controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 1500),
     )..repeat();
   }
 
@@ -53,7 +53,59 @@ class _WaveProgressIndicatorState extends State<WaveProgressIndicator>
               phase: controller.value,
               value: widget.value,
               color: widget.color ?? colorScheme.primary,
-              trackColor: widget.trackColor ?? colorScheme.surfaceContainerHighest,
+              trackColor: widget.trackColor ?? colorScheme.primaryContainer,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class WaveCircularProgressIndicator extends StatefulWidget {
+  final double size;
+  final Color? color;
+
+  const WaveCircularProgressIndicator({
+    super.key,
+    this.size = 48,
+    this.color,
+  });
+
+  @override
+  State<WaveCircularProgressIndicator> createState() => _WaveCircularProgressIndicatorState();
+}
+
+class _WaveCircularProgressIndicatorState extends State<WaveCircularProgressIndicator>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController controller;
+
+  @override
+  void initState() {
+    super.initState();
+    controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RepaintBoundary(
+      child: SizedBox.square(
+        dimension: widget.size,
+        child: AnimatedBuilder(
+          animation: controller,
+          builder: (context, _) => CustomPaint(
+            painter: _WaveCircularProgressPainter(
+              phase: controller.value,
+              color: widget.color ?? Theme.of(context).colorScheme.primary,
             ),
           ),
         ),
@@ -77,53 +129,53 @@ class _WaveProgressPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final strokeWidth = math.max(3.0, size.height * 0.56).toDouble();
-    final centerY = size.height / 2;
-    final trackPaint = Paint()
-      ..color = trackColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-    canvas.drawLine(
-      Offset(strokeWidth / 2, centerY),
-      Offset(size.width - strokeWidth / 2, centerY),
-      trackPaint,
-    );
+    final radius = size.height / 2;
+    final trackRect = RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(radius));
+    canvas.drawRRect(trackRect, Paint()..color = trackColor);
 
-    final availableWidth = math.max(0.0, size.width - strokeWidth).toDouble();
-    final waveWidth = (value == null
-        ? math.min(availableWidth * 0.45, 96.0)
-        : availableWidth * value!).toDouble();
+    final waveWidth = value == null
+        ? math.min(size.width * 0.42, 120.0).toDouble()
+        : size.width * value!;
     if (waveWidth <= 0) return;
 
-    final startX = value == null
-        ? strokeWidth / 2 + (availableWidth + waveWidth) * phase - waveWidth
-        : strokeWidth / 2;
-    final endX = math.min(size.width - strokeWidth / 2, startX + waveWidth).toDouble();
-    final clippedStartX = math.max(strokeWidth / 2, startX).toDouble();
+    final startX = value == null ? (size.width + waveWidth) * phase - waveWidth : 0.0;
+    final endX = math.min(size.width, startX + waveWidth).toDouble();
+    final clippedStartX = math.max(0.0, startX).toDouble();
     if (endX <= clippedStartX) return;
 
-    final wavePath = Path();
-    const segment = 2.0;
-    final amplitude = math.max(1.0, strokeWidth * 0.22).toDouble();
-    for (var x = clippedStartX; x <= endX; x += segment) {
-      final y = centerY + math.sin((x * 0.18) + phase * math.pi * 2) * amplitude;
-      if (x == clippedStartX) {
-        wavePath.moveTo(x, y);
-      } else {
-        wavePath.lineTo(x, y);
-      }
+    final wavePath = Path()..moveTo(clippedStartX, size.height);
+    const step = 2.0;
+    final amplitude = math.max(1.8, size.height * 0.16).toDouble();
+    final centerY = size.height / 2;
+    for (var x = clippedStartX; x <= endX; x += step) {
+      final y = centerY + math.sin((x * 0.16) + phase * math.pi * 2) * amplitude;
+      wavePath.lineTo(x, y);
     }
-    final finalY = centerY + math.sin((endX * 0.18) + phase * math.pi * 2) * amplitude;
-    wavePath.lineTo(endX, finalY);
+    wavePath
+      ..lineTo(endX, size.height)
+      ..close();
 
-    final wavePaint = Paint()
-      ..color = color
+    canvas.save();
+    canvas.clipRRect(trackRect);
+    final fillPaint = Paint()
+      ..shader = LinearGradient(
+        colors: [color.withAlpha(210), color],
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+      ).createShader(Offset.zero & size);
+    canvas.drawPath(wavePath, fillPaint);
+
+    final highlightPaint = Paint()
+      ..color = Colors.white.withAlpha(70)
+      ..strokeWidth = math.max(1.0, size.height * 0.08).toDouble()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    canvas.drawPath(wavePath, wavePaint);
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(
+      Offset(clippedStartX + radius, radius * 0.62),
+      Offset(math.max(clippedStartX + radius, endX - radius).toDouble(), radius * 0.62),
+      highlightPaint,
+    );
+    canvas.restore();
   }
 
   @override
@@ -132,5 +184,50 @@ class _WaveProgressPainter extends CustomPainter {
         value != oldDelegate.value ||
         color != oldDelegate.color ||
         trackColor != oldDelegate.trackColor;
+  }
+}
+
+class _WaveCircularProgressPainter extends CustomPainter {
+  final double phase;
+  final Color color;
+
+  const _WaveCircularProgressPainter({
+    required this.phase,
+    required this.color,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final orbitRadius = size.shortestSide * 0.31;
+    final dotRadius = math.max(2.4, size.shortestSide * 0.075).toDouble();
+    const count = 12;
+
+    for (var index = 0; index < count; index++) {
+      final position = (index / count + phase) % 1;
+      final angle = position * math.pi * 2 - math.pi / 2;
+      final emphasis = math.pow(1 - position, 2).toDouble();
+      final radius = dotRadius * (0.7 + emphasis * 0.42);
+      final dotColor = Color.lerp(color.withAlpha(55), color, emphasis)!;
+      canvas.drawCircle(
+        Offset(
+          center.dx + math.cos(angle) * orbitRadius,
+          center.dy + math.sin(angle) * orbitRadius,
+        ),
+        radius,
+        Paint()..color = dotColor,
+      );
+    }
+
+    canvas.drawCircle(
+      center,
+      dotRadius * 0.78,
+      Paint()..color = color.withAlpha(38),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _WaveCircularProgressPainter oldDelegate) {
+    return phase != oldDelegate.phase || color != oldDelegate.color;
   }
 }

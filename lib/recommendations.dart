@@ -507,7 +507,10 @@ class _RecommendationDownloadDialogState extends State<RecommendationDownloadDia
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          WaveProgressIndicator(value: totalBytes > 0 ? progress : null),
+          WaveProgressIndicator(
+            value: totalBytes > 0 ? progress : null,
+            height: 18,
+          ),
           const SizedBox(height: 10),
           Text(
             totalBytes > 0 && !completed

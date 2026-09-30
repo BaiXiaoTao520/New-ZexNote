@@ -16,7 +16,7 @@ import 'wave_progress_indicator.dart';
 const String repository = "BaiXiaoTao520/New-ZexNote";
 const String repositoryUrl = "https://github.com/$repository";
 const String githubLatestApkUrl = "$repositoryUrl/releases/latest/download/app-release.apk";
-const String currentVersion = "3.0.0";
+const String currentVersion = "3.0.1";
 const String mirrorResId = String.fromEnvironment("MIRROR_RES_ID");
 const String mirrorApiUrl = "https://mirrorchyan.com/api/resources/$mirrorResId/latest";
 const String mirrorProjectUrl = "https://mirrorchyan.com/zh/projects?rid=$mirrorResId";
@@ -1209,7 +1209,10 @@ class _UpdateDialogState extends State<UpdateDialog> with WidgetsBindingObserver
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          WaveProgressIndicator(value: totalBytes > 0 ? progress : null),
+          WaveProgressIndicator(
+            value: totalBytes > 0 ? progress : null,
+            height: 18,
+          ),
           const SizedBox(height: 10),
           Text(
             totalBytes > 0 && !completed
@@ -2538,19 +2541,25 @@ class _UpdateCheckingDialogState extends State<UpdateCheckingDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return const AlertDialog(
-      title: Text("检查更新"),
+    return AlertDialog(
+      title: const Text("检查更新"),
       content: SizedBox(
         width: 280,
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            SizedBox(
-              width: 24,
-              height: 24,
-              child: WaveProgressIndicator(height: 24),
+            const WaveCircularProgressIndicator(size: 64),
+            const SizedBox(height: 20),
+            Text(
+              "正在检查最新版本…",
+              style: Theme.of(context).textTheme.titleMedium,
             ),
-            SizedBox(width: 16),
-            Expanded(child: Text("正在检查最新版本…")),
+            const SizedBox(height: 6),
+            Text(
+              "正在连接 GitHub 与镜像服务",
+              style: Theme.of(context).textTheme.bodySmall,
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
       ),
@@ -2662,7 +2671,7 @@ class _DownloadDirectoryDialogState extends State<DownloadDirectoryDialog> {
       content: loading
           ? const SizedBox(
               height: 72,
-              child: Center(child: WaveProgressIndicator(height: 18)),
+              child: Center(child: WaveCircularProgressIndicator(size: 40)),
             )
           : TextField(
               controller: directoryController,
@@ -2907,7 +2916,7 @@ class _ContributorsDialogState extends State<ContributorsDialog> {
                       child: SizedBox(
                         width: 22,
                         height: 22,
-                        child: WaveProgressIndicator(height: 14),
+                        child: WaveCircularProgressIndicator(size: 22),
                       ),
                     );
                   },
@@ -2931,7 +2940,7 @@ class _ContributorsDialogState extends State<ContributorsDialog> {
     if (contributors == null && errorMessage == null) {
       return const SizedBox(
         height: 220,
-        child: Center(child: WaveProgressIndicator(height: 18)),
+        child: Center(child: WaveCircularProgressIndicator(size: 46)),
       );
     }
     if (errorMessage != null) {
