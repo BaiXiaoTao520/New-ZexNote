@@ -159,9 +159,9 @@ class _InstallationProgressDialogState extends State<InstallationProgressDialog>
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
+    return const PopScope(
       canPop: false,
-      child: const AlertDialog(
+      child: AlertDialog(
         title: Text("正在安装"),
         content: Row(
           children: [
