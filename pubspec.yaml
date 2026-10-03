@@ -1,6 +1,6 @@
 name: zexnote
 description: ZexNote 本地便签软件
-version: 3.0.6+30
+version: 3.0.7+31
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
