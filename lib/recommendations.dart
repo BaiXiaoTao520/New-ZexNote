@@ -72,7 +72,7 @@ const tomatoRecommendation = RecommendedApp(
   version: "v2.0.1",
   summary: "开源简洁的番茄钟软件",
   downloadUrl:
-      "https://gh.xmly.dev/https://github.com/nsh07/Tomato/releases/download/v2.0.1/tomato-v2.0.1-release.apk",
+      "https://v4.gh-proxy.org/https://github.com/nsh07/Tomato/releases/download/v2.0.1/tomato-v2.0.1-release.apk",
   icon: Icons.timer_outlined,
   description: "开源简洁的番茄钟软件",
 );
@@ -81,7 +81,7 @@ const coolMonitorRecommendation = RecommendedApp(
   name: "CoolMonitor",
   version: "v5.3.2",
   summary: "开源设备健康监控诊断工具",
-  downloadUrl: "https://zexrikka.lanzoul.com/b00zyz1u3a",
+  downloadUrl: "https://wwbaa.lanzoub.com/b01gicpghc",
   icon: Icons.monitor_heart_outlined,
   browserOnly: true,
   description: "CoolMonitor 安卓设备健康监控诊断工具，实时监测CPU/电池温度、后台耗电应用、WiFi网络风险，支持App权限审计、垃圾营销通知过滤、电池健康评估，内置AI智能分析设备异常并给出优化建议，纯本地数据处理不上传隐私，无广告免费使用",
@@ -92,7 +92,7 @@ const komiStoreRecommendation = RecommendedApp(
   version: "v1.9.2",
   summary: "开源 Github 仓库应用商店",
   downloadUrl:
-      "https://gh.xmly.dev/https://github.com/komi-store/komi-store/releases/download/v1.9.2/Komi-Store-1.9.2.apk",
+      "https://v4.gh-proxy.org/https://github.com/komi-store/komi-store/releases/download/v1.9.2/Komi-Store-1.9.2.apk",
   icon: Icons.storefront_outlined,
   description: """Komi Store only helps you discover and download release assets that are already published on GitHub by third-party developers. The contents, safety, and behavior of those downloads are entirely the responsibility of their respective authors and distributors, not this project.
 
@@ -101,10 +101,10 @@ By using Komi Store, you understand and agree that you install and run any downl
 
 const reveriePaintRecommendation = RecommendedApp(
   name: "ReveriePaint",
-  version: "v1.3.0",
+  version: "v1.4.0",
   summary: "基于 Krita 核心引擎打造的 Android 原生数字绘画应用",
   downloadUrl:
-      "https://gh.xmly.dev/https://github.com/LanRhyme/ReveriePaint/releases/download/v1.3.0/ReveriePaint-v1.3.0.apk",
+      "https://v4.gh-proxy.org/https://github.com/LanRhyme/ReveriePaint/releases/download/v1.4.0/ReveriePaint-v1.4.0.apk",
   icon: Icons.brush_rounded,
   description: r"""基于 Krita 核心引擎打造的 Android 原生现代数字绘画应用
 
@@ -332,7 +332,7 @@ class CoolMonitorDownloadInfoDialog extends StatelessWidget {
       content: const Text(
         "即将跳转至浏览器\n"
         "网盘商：蓝奏云\n"
-        "提取码：dem0\n"
+        "提取码：1c37\n"
         "建议更换为电脑 UA 访问下载文件",
         style: TextStyle(height: 1.5),
       ),
