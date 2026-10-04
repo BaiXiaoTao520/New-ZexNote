@@ -15,7 +15,7 @@ import 'recommendations.dart';
 const String repository = "BaiXiaoTao520/New-ZexNote";
 const String repositoryUrl = "https://github.com/$repository";
 const String githubLatestApkUrl = "$repositoryUrl/releases/latest/download/app-release.apk";
-const String currentVersion = "3.0.7";
+const String currentVersion = "3.1.0";
 const String mirrorResId = String.fromEnvironment("MIRROR_RES_ID");
 const String mirrorApiUrl = "https://mirrorchyan.com/api/resources/$mirrorResId/latest";
 const String mirrorProjectUrl = "https://mirrorchyan.com/zh/projects?rid=$mirrorResId";
@@ -2880,10 +2880,6 @@ class SponsorshipDialog extends StatelessWidget {
               Text("2. 如果 ZexNote 帮到了你，可以自愿赞助支持作者。赞助完全自愿，不赞助也能使用全部功能，赞助不会解锁额外特权。"),
               SizedBox(height: 16),
               Text("3. 点击下方按钮会打开浏览器，跳转到 GitHub README 介绍中，滑到最下面找到赞赏码并截图保存，打开微信点扫一扫，选择你刚截屏过的内容即可。"),
-              SizedBox(height: 20),
-              Text("如需加入QQ交流群："),
-              SizedBox(height: 8),
-              Text("考虑到群维护精力有限，同时曾遭遇恶意举报干扰，入群需要至少5元的赞助门槛，感谢大家理解与配合。"),
             ],
           ),
         ),
