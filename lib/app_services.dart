@@ -45,6 +45,75 @@ Future<bool> hasRootAccess() async {
   }
 }
 
+Future<String?> detectUnsupportedSystem() async {
+  Map<String, String>? properties;
+  try {
+    final raw = await installerChannel.invokeMapMethod<String, dynamic>("systemProperties");
+    if (raw != null) {
+      properties = raw.map((key, value) => MapEntry(key, value?.toString() ?? ""));
+    }
+  } catch (_) {
+    properties = null;
+  }
+  if (properties == null) return null;
+
+  String value(String key) => properties![key]?.trim().toLowerCase() ?? "";
+
+  final flymeSignal = [
+    value("ro.flyme.version"),
+    value("ro.flyme.os.version"),
+    value("ro.build.flyme.version"),
+    value("persist.sys.flyme.version"),
+    value("ro.aios.version"),
+  ].any((item) => item.isNotEmpty);
+  final displayAndFingerprint =
+      "${value("ro.build.display.id")} ${value("ro.build.fingerprint")}";
+  if (flymeSignal ||
+      displayAndFingerprint.contains("flyme") ||
+      displayAndFingerprint.contains("aios")) {
+    return "Flyme 系统";
+  }
+
+  final isFuntouch = value("ro.vivo.os.name").contains("funtouch") ||
+      value("ro.vivo.os.version").contains("funtouch") ||
+      value("ro.build.display.id").contains("funtouch");
+  // 仅在国内版有明确标记时才拦截；海外版或标记缺失一律放行，避免误伤海外用户
+  final overseasFlag = value("ro.vivo.product.overseas");
+  final explicitlyDomestic = overseasFlag == "no" || overseasFlag == "false" || overseasFlag == "0";
+  if (isFuntouch && explicitlyDomestic) {
+    return "Funtouch OS（国内版）";
+  }
+  return null;
+}
+
+class UnsupportedSystemDialog extends StatelessWidget {
+  final String systemName;
+
+  const UnsupportedSystemDialog({super.key, required this.systemName});
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      child: AlertDialog(
+        icon: const Icon(Icons.block),
+        title: const Text("抱歉，你的系统不再支持"),
+        content: Text(
+          "检测到当前设备运行 $systemName。由于该系统对第三方应用的安装与后台限制过于严格，"
+          "ZexNote 在上面无法稳定保存便签，继续使用可能导致数据丢失。\n\n"
+          "为保护你的笔记安全，我们已停止对 $systemName 的支持。感谢理解。",
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => SystemNavigator.pop(animated: true),
+            child: const Text("退出应用"),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class RootInstallResult {
   final bool success;
   final String message;

@@ -76,6 +76,25 @@ class MainActivity : FlutterActivity() {
                         val path = call.argument<String>("path")
                         result.success(path != null && hasSameApkSignature(File(path)))
                     }
+                    "systemProperties" -> {
+                        val keys = listOf(
+                            "ro.flyme.version",
+                            "ro.flyme.os.version",
+                            "ro.build.flyme.version",
+                            "persist.sys.flyme.version",
+                            "ro.aios.version",
+                            "ro.vivo.os.name",
+                            "ro.vivo.os.version",
+                            "ro.vivo.product.overseas",
+                            "ro.build.display.id",
+                            "ro.build.fingerprint",
+                            "ro.product.brand",
+                            "ro.product.manufacturer",
+                            "ro.product.model"
+                        )
+                        val properties = keys.associateWith { getSystemProperty(it) }
+                        result.success(properties)
+                    }
                     "hasRootAccess" -> runRootCommand("id", result)
                     "rootInstallApk" -> {
                         val path = call.argument<String>("path")
@@ -108,6 +127,23 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    private fun getSystemProperty(key: String): String {
+        try {
+            val systemProperties = Class.forName("android.os.SystemProperties")
+            val get = systemProperties.getMethod("get", String::class.java, String::class.java)
+            val value = get.invoke(null, key, "") as? String
+            if (!value.isNullOrEmpty()) return value
+        } catch (_: Exception) {}
+        return try {
+            val process = ProcessBuilder("getprop", key).start()
+            val value = process.inputStream.bufferedReader().use { it.readText() }.trim()
+            process.waitFor()
+            value
+        } catch (_: Exception) {
+            ""
+        }
     }
 
     private fun runRootCommand(command: String, result: MethodChannel.Result) {
