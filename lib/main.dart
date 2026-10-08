@@ -15,7 +15,7 @@ import 'recommendations.dart';
 const String repository = "BaiXiaoTao520/New-ZexNote";
 const String repositoryUrl = "https://github.com/$repository";
 const String githubLatestApkUrl = "$repositoryUrl/releases/latest/download/app-release.apk";
-const String currentVersion = "3.1.0";
+const String currentVersion = "3.1.1";
 const String mirrorResId = String.fromEnvironment("MIRROR_RES_ID");
 const String mirrorApiUrl = "https://mirrorchyan.com/api/resources/$mirrorResId/latest";
 const String mirrorProjectUrl = "https://mirrorchyan.com/zh/projects?rid=$mirrorResId";
@@ -28,8 +28,16 @@ final ValueNotifier<bool> globalDynamicColorNotifier = ValueNotifier(true);
 final ValueNotifier<bool> globalNavigationBlurNotifier = ValueNotifier(true);
 final ValueNotifier<Color> globalThemeSeedNotifier = ValueNotifier(Colors.lightGreen);
 
+bool isUnsupportedSystem = false;
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final unsupportedSystem = await detectUnsupportedSystem();
+  if (unsupportedSystem != null) {
+    isUnsupportedSystem = true;
+    runApp(UnsupportedSystemApp(systemName: unsupportedSystem));
+    return;
+  }
   final prefs = await SharedPreferences.getInstance();
   globalDynamicColorNotifier.value = prefs.getBool("dynamicColor") ?? true;
   globalNavigationBlurNotifier.value = prefs.getBool("navigationBlur") ?? true;
@@ -37,6 +45,36 @@ void main() async {
     prefs.getInt("themeSeedColor") ?? Colors.lightGreen.value,
   );
   runApp(const ZexNoteApp());
+}
+
+class UnsupportedSystemApp extends StatelessWidget {
+  final String systemName;
+
+  const UnsupportedSystemApp({super.key, required this.systemName});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: "ZexNote",
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.lightGreen),
+        useMaterial3: true,
+      ),
+      debugShowCheckedModeBanner: false,
+      home: Builder(
+        builder: (context) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            showDialog<void>(
+              context: context,
+              barrierDismissible: false,
+              builder: (dialogContext) => UnsupportedSystemDialog(systemName: systemName),
+            );
+          });
+          return const Scaffold(body: SizedBox.shrink());
+        },
+      ),
+    );
+  }
 }
 
 class ZexNoteApp extends StatelessWidget {
@@ -403,6 +441,7 @@ class _MainPageState extends State<MainPage> {
   }
 
   Future<void> autoCheckUpdate() async {
+    if (isUnsupportedSystem) return;
     final prefs = await SharedPreferences.getInstance();
     if (prefs.getBool("autoCheckUpdate") ?? true) {
       await checkVersion(showNoUpdateToast: false);
@@ -443,6 +482,7 @@ class _MainPageState extends State<MainPage> {
     bool showNoUpdateToast = true,
     VoidCallback? onUpdateFound,
   }) async {
+    if (isUnsupportedSystem) return;
     final update = await _fetchLatestUpdate();
     if (!mounted) return;
 
